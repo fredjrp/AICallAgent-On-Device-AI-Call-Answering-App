@@ -1,5 +1,8 @@
 package com.aicall.agent.root
 
+import android.content.Context
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import com.aicall.agent.util.Logger
 import java.io.BufferedReader
 import java.io.File
@@ -31,6 +34,13 @@ object PrivilegedAudioAccess {
     fun isPrivAppInstalled(): Boolean {
         val privAppDir = File("/system/priv-app/AICallAgent")
         return privAppDir.exists()
+    }
+
+    fun hasPrivAppAudioPermission(context: Context): Boolean {
+        return isPrivAppInstalled() || ContextCompat.checkSelfPermission(
+            context,
+            "android.permission.CAPTURE_AUDIO_OUTPUT"
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     fun getSelinuxStatus(): String {
