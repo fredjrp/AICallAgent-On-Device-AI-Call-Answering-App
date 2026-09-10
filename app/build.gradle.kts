@@ -62,6 +62,12 @@ android {
     lint {
         abortOnError = false
     }
+
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {

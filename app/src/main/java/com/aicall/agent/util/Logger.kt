@@ -36,7 +36,7 @@ object Logger {
                 append(message)
                 if (throwable != null) {
                     append("\n")
-                    append(Log.getStackTraceString(throwable))
+                    append(throwable.stackTraceToString())
                 }
             }
     }
@@ -85,7 +85,11 @@ object Logger {
         platformLog: (String, String) -> Unit
     ) {
         val formattedMessage = if (!sessionId.isNullOrEmpty()) "[$sessionId] $message" else message
-        platformLog("$GLOBAL_TAG:$tag", formattedMessage)
+        try {
+            platformLog("$GLOBAL_TAG:$tag", formattedMessage)
+        } catch (_: Throwable) {
+            // Gracefully handles Android stub when executing in JVM unit test runner
+        }
 
         val entry = LogEntry(
             timestamp = System.currentTimeMillis(),
