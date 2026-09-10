@@ -1,4 +1,4 @@
-﻿plugins {
+plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
@@ -81,26 +81,27 @@ dependencies {
 
 // Task to build the Magisk Priv-App Module Zip
 tasks.register<Zip>("packageMagiskModule") {
-    dependsOn("assembleDebug")
     group = "magisk"
     description = "Packages the AICallAgent app and permissions into a flashable Magisk module zip"
 
     archiveFileName.set("AICallAgent-magisk.zip")
     destinationDirectory.set(file("${layout.buildDirectory.get()}/outputs/magisk"))
 
-    val apkFile = file("${layout.buildDirectory.get()}/outputs/apk/debug/app-debug.apk")
-    val magiskDir = file("magisk")
+    val magiskDir = rootProject.file("magisk-module")
 
     from(File(magiskDir, "module.prop"))
     from(File(magiskDir, "service.sh"))
     from(File(magiskDir, "customize.sh"))
 
-    from(File(magiskDir, "privapp-permissions-aicallagent.xml")) {
+    from(File(magiskDir, "system/etc/permissions/privapp-permissions-aicallagent.xml")) {
         into("system/etc/permissions")
     }
 
-    from(apkFile) {
+    from(fileTree("${layout.buildDirectory.get()}/outputs/apk") {
+        include("**/*.apk")
+    }) {
         into("system/priv-app/AICallAgent")
         rename { "AICallAgent.apk" }
     }
 }
+
