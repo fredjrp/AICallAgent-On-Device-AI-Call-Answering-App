@@ -1,4 +1,4 @@
-﻿package com.aicall.agent.ui
+package com.aicall.agent.ui
 
 import android.Manifest
 import android.annotation.SuppressLint

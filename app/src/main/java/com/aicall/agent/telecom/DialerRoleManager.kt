@@ -1,4 +1,4 @@
-﻿package com.aicall.agent.telecom
+package com.aicall.agent.telecom
 
 import android.app.role.RoleManager
 import android.content.Context

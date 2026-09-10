@@ -1,4 +1,4 @@
-﻿package com.aicall.agent.pipeline
+package com.aicall.agent.pipeline
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

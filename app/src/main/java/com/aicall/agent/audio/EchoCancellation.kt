@@ -1,4 +1,4 @@
-﻿package com.aicall.agent.audio
+package com.aicall.agent.audio
 
 import android.media.audiofx.AcousticEchoCanceler
 import com.aicall.agent.util.Logger

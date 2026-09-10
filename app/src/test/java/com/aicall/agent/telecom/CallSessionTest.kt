@@ -1,4 +1,4 @@
-﻿package com.aicall.agent.telecom
+package com.aicall.agent.telecom
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

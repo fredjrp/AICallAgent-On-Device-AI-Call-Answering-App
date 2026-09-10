@@ -1,4 +1,4 @@
-﻿package com.aicall.agent.pipeline
+package com.aicall.agent.pipeline
 
 /**
  * Clean abstraction boundary for on-device Speech-To-Text (Whisper).

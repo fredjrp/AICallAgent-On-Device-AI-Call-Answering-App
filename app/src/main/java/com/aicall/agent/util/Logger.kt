@@ -1,4 +1,4 @@
-﻿package com.aicall.agent.util
+package com.aicall.agent.util
 
 import android.util.Log
 import java.text.SimpleDateFormat

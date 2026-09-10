@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Backgrounds (OLED Deep Slate) -->
     <color name="bg_canvas">#0A0E17</color>

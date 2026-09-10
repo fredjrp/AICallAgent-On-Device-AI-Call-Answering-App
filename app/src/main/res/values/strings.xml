@@ -1,4 +1,4 @@
-﻿<resources>
+<resources>
     <string name="app_name">AICallAgent</string>
     <string name="subtitle">On-Device AI Telecom Assistant</string>
     <string name="hero_status_idle">Monitoring for Incoming Calls</string>

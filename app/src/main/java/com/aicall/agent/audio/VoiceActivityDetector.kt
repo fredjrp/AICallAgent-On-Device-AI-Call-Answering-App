@@ -1,4 +1,4 @@
-﻿package com.aicall.agent.audio
+package com.aicall.agent.audio
 
 import kotlin.math.sqrt
 

@@ -1,4 +1,4 @@
-﻿package com.aicall.agent.root
+package com.aicall.agent.root
 
 import com.aicall.agent.util.Logger
 import java.io.BufferedReader

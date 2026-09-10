@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <permissions>
     <privapp-permissions package="com.aicall.agent">
         <!-- Allows capturing the audio stream of phone calls via AudioRecord on VOICE_CALL / VOICE_DOWNLINK -->

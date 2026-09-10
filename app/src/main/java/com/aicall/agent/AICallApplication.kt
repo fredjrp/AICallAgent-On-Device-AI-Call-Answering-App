@@ -1,4 +1,4 @@
-﻿package com.aicall.agent
+package com.aicall.agent
 
 import android.app.Application
 import android.app.NotificationChannel

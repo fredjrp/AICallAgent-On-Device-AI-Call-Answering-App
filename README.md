@@ -1,4 +1,4 @@
-﻿# AICallAgent — On-Device AI Call Answering Assistant
+# AICallAgent — On-Device AI Call Answering Assistant
 
 `AICallAgent` is a privileged Android telephony application designed to run on a dedicated, rooted Qualcomm Android device. When a voice call arrives (such as via carrier-level call forwarding from a Safaricom line), the app:
 
