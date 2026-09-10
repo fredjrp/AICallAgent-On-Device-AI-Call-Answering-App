@@ -69,6 +69,16 @@ class CallAnswerService : InCallService() {
 
         Logger.i(tag, "New call added: state=${call.state}, caller=$phoneNumber", sessionId)
 
+        // Launch In-Call UI Activity
+        try {
+            val inCallIntent = Intent(this, com.aicall.agent.ui.InCallActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+            startActivity(inCallIntent)
+        } catch (e: Exception) {
+            Logger.w(tag, "Could not launch InCallActivity directly: ${e.message}")
+        }
+
         val callback = object : Call.Callback() {
             override fun onStateChanged(targetCall: Call, state: Int) {
                 session.state = state
@@ -241,12 +251,24 @@ class CallAnswerService : InCallService() {
     }
 
     private fun buildInCallNotification(content: String): Notification {
+        val inCallIntent = Intent(this, com.aicall.agent.ui.InCallActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        } else {
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val pendingIntent = android.app.PendingIntent.getActivity(this, 0, inCallIntent, flags)
+
         return NotificationCompat.Builder(this, AICallApplication.CHANNEL_ID_INCALL)
             .setContentTitle("AICallAgent Active Call")
             .setContentText(content)
             .setSmallIcon(android.R.drawable.ic_menu_call)
+            .setContentIntent(pendingIntent)
+            .setFullScreenIntent(pendingIntent, true)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
     }
 

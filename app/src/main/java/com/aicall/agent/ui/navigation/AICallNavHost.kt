@@ -57,12 +57,17 @@ import com.aicall.agent.ui.theme.TextPrimary
 import com.aicall.agent.ui.theme.TextSecondary
 import com.aicall.agent.ui.theme.TextTertiary
 
+import androidx.compose.material.icons.filled.Dialpad
+import androidx.compose.material.icons.outlined.Dialpad
+import com.aicall.agent.ui.screens.DialpadScreen
+
 enum class Screen(
     val title: String,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 ) {
     CALLS("History", Icons.Filled.History, Icons.Outlined.History),
+    KEYPAD("Keypad", Icons.Filled.Dialpad, Icons.Outlined.Dialpad),
     ASSISTANT("Assistant", Icons.Filled.SmartToy, Icons.Outlined.SmartToy),
     SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
@@ -82,9 +87,11 @@ fun AICallMainApp(
     onSavePrompt: (String) -> Unit,
     selectedModel: String,
     onSelectModel: (String) -> Unit,
-    onTestAssistant: () -> Unit
+    onTestAssistant: () -> Unit,
+    initialScreen: Screen = Screen.ASSISTANT,
+    prefilledNumber: String = ""
 ) {
-    var currentScreen by remember { mutableStateOf(Screen.ASSISTANT) }
+    var currentScreen by remember(initialScreen) { mutableStateOf(initialScreen) }
 
     Scaffold(
         containerColor = SurfaceCanvas,
@@ -102,6 +109,7 @@ fun AICallMainApp(
         ) {
             when (currentScreen) {
                 Screen.CALLS -> CallHistoryScreen()
+                Screen.KEYPAD -> DialpadScreen(initialNumber = prefilledNumber)
                 Screen.ASSISTANT -> AssistantScreen(
                     currentSession = currentSession,
                     isAutoAnswerEnabled = isAutoAnswerEnabled,

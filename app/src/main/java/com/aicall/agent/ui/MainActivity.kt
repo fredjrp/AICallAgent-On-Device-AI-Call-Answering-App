@@ -69,8 +69,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var initialScreenState by mutableStateOf(com.aicall.agent.ui.navigation.Screen.ASSISTANT)
+    private var prefilledNumberState by mutableStateOf("")
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleDialIntent(intent)
 
         roleManager = DialerRoleManager(this)
         prefs = PreferencesManager.getInstance(this)
@@ -107,6 +111,8 @@ class MainActivity : ComponentActivity() {
                     },
                     isDefaultDialer = isDefaultDialerState,
                     shizukuState = shizukuState,
+                    initialScreen = initialScreenState,
+                    prefilledNumber = prefilledNumberState,
                     onRequestDialerRole = {
                         val intent = roleManager.createDefaultDialerIntent()
                         if (intent != null) {
@@ -186,6 +192,26 @@ class MainActivity : ComponentActivity() {
 
         if (missing.isNotEmpty()) {
             permissionLauncher.launch(missing.toTypedArray())
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDialIntent(intent)
+    }
+
+    private fun handleDialIntent(intent: android.content.Intent?) {
+        if (intent == null) return
+        if (intent.action == android.content.Intent.ACTION_DIAL || intent.action == android.content.Intent.ACTION_VIEW) {
+            val data = intent.data
+            val schemeSpecific = data?.schemeSpecificPart
+            if (!schemeSpecific.isNullOrEmpty()) {
+                prefilledNumberState = schemeSpecific
+                initialScreenState = com.aicall.agent.ui.navigation.Screen.KEYPAD
+            } else if (intent.action == android.content.Intent.ACTION_DIAL) {
+                initialScreenState = com.aicall.agent.ui.navigation.Screen.KEYPAD
+            }
         }
     }
 }

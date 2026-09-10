@@ -62,7 +62,22 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="tel" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tel" />
+            </intent-filter>
         </activity>
+
+        <!-- In-Call UI Activity (displayed during incoming and active calls) -->
+        <activity
+            android:name=".ui.InCallActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:launchMode="singleInstance"
+            android:theme="@style/Theme.AICallAgent" />
 
         <!-- Core InCallService that monitors, auto-answers, and taps live call audio -->
         <service
@@ -72,7 +87,7 @@
             android:foregroundServiceType="microphone|phoneCall">
             <meta-data
                 android:name="android.telecom.IN_CALL_SERVICE_UI"
-                android:value="false" />
+                android:value="true" />
             <meta-data
                 android:name="android.telecom.INCLUDE_SELF_MANAGED_CALLS"
                 android:value="true" />
