@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AICallAgent" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:statusBarColor">@color/bg_canvas</item>
+        <item name="android:navigationBarColor">@color/bg_canvas</item>
+        <item name="android:windowBackground">@color/bg_canvas</item>
+        <item name="colorPrimary">@color/brand_indigo</item>
+        <item name="colorSecondary">@color/brand_emerald</item>
+        <item name="colorError">@color/brand_rose</item>
+    </style>
+</resources>

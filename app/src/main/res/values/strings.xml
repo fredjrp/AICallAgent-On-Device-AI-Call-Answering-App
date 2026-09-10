@@ -1,0 +1,14 @@
+﻿<resources>
+    <string name="app_name">AICallAgent</string>
+    <string name="subtitle">On-Device AI Telecom Assistant</string>
+    <string name="hero_status_idle">Monitoring for Incoming Calls</string>
+    <string name="hero_status_ringing">Incoming Call Detected</string>
+    <string name="hero_status_incall">In-Call • AI Audio Loop Active</string>
+    <string name="grant_dialer_role">Set Default Dialer</string>
+    <string name="dialer_role_granted">Default Dialer Active</string>
+    <string name="auto_answer_title">Auto-Answer Calls</string>
+    <string name="auto_answer_desc">Pick up incoming calls immediately without ringing</string>
+    <string name="openrouter_api_key">OpenRouter API Key</string>
+    <string name="openrouter_key_hint">sk-or-v1-...</string>
+    <string name="save_key">Save Key</string>
+</resources>
