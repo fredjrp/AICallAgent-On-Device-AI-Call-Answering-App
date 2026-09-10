@@ -19,6 +19,12 @@
     <color name="brand_amber">#FF9500</color>
     <color name="brand_red">#FF3B30</color>
 
+    <!-- Legacy / Compatibility Tokens -->
+    <color name="brand_indigo">#8950E5</color>
+    <color name="brand_indigo_light">#A77DF0</color>
+    <color name="brand_emerald">#34C759</color>
+    <color name="brand_rose">#FF3B30</color>
+
     <!-- Status Badges -->
     <color name="badge_success_bg">#E8F8EE</color>
     <color name="badge_success_text">#34C759</color>
