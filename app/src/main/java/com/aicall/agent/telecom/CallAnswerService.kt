@@ -41,6 +41,7 @@ class CallAnswerService : InCallService() {
         super.onCreate()
         Logger.i(tag, "CallAnswerService created and bound to Android Telecom")
         activeServiceInstance = this
+        com.aicall.agent.shizuku.ShizukuStatusMonitor.startMonitoring()
     }
 
     override fun onDestroy() {
@@ -48,6 +49,7 @@ class CallAnswerService : InCallService() {
         Logger.i(tag, "CallAnswerService destroyed")
         audioCapture?.stopCapture()
         activeServiceInstance = null
+        com.aicall.agent.shizuku.ShizukuStatusMonitor.stopMonitoring()
     }
 
     override fun onCallAdded(call: Call) {
@@ -163,7 +165,21 @@ class CallAnswerService : InCallService() {
 
         notifyListeners { it.onCallActive(session.sessionId, call) }
 
-        // Start privileged audio capture
+        // Validate Shizuku privileged access
+        if (!com.aicall.agent.shizuku.ShizukuAudioAccess.isShizukuRunning()) {
+            Logger.e(tag, "Shizuku is not running! Cannot capture audio output.", session.sessionId)
+            postShizukuAlert("Shizuku Not Running", "Open Shizuku app and tap Start before calls can be captured.")
+        } else if (!com.aicall.agent.shizuku.ShizukuAudioAccess.hasShizukuPermission()) {
+            Logger.w(tag, "Shizuku permission not granted for AICallAgent", session.sessionId)
+            postShizukuAlert("Shizuku Permission Required", "Grant AICallAgent permission in Shizuku.")
+        } else {
+            // Ensure CAPTURE_AUDIO_OUTPUT is granted
+            if (!com.aicall.agent.shizuku.ShizukuAudioAccess.hasCaptureAudioOutputPermission(this)) {
+                com.aicall.agent.shizuku.ShizukuAudioAccess.grantCaptureAudioOutputViaShizuku(this)
+            }
+        }
+
+        // Start audio capture
         val prefs = PreferencesManager.getInstance(this)
         val recordingsDir = File(getExternalFilesDir(null), "recordings").apply { mkdirs() }
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
@@ -182,6 +198,22 @@ class CallAnswerService : InCallService() {
 
         if (!started) {
             Logger.e(tag, "AudioCapture failed to start for session ${session.sessionId}", session.sessionId)
+        }
+    }
+
+    private fun postShizukuAlert(title: String, message: String) {
+        try {
+            val notificationManager = getSystemService(android.app.NotificationManager::class.java)
+            val notification = NotificationCompat.Builder(this, AICallApplication.CHANNEL_ID_ALERTS)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .build()
+            notificationManager.notify(AICallApplication.NOTIFICATION_ID_SHIZUKU_ALERT, notification)
+        } catch (e: Exception) {
+            Logger.w(tag, "Failed to post alert notification: ${e.message}")
         }
     }
 

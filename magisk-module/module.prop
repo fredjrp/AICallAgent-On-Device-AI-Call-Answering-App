@@ -1,6 +1,0 @@
-﻿id=aicallagent
-name=AICallAgent Privileged Caller Assistant
-version=v1.0.0
-versionCode=100
-author=AICallAgent Team
-description=Privileged InCallService with CAPTURE_AUDIO_OUTPUT for on-device AI call answering.

@@ -1,9 +1,9 @@
 # AICallAgent — On-Device AI Call Answering Assistant
 
-`AICallAgent` is a privileged Android telephony application designed to run on a dedicated, rooted Qualcomm Android device. When a voice call arrives (such as via carrier-level call forwarding from a Safaricom line), the app:
+`AICallAgent` is an intelligent Android telephony application designed to run on Android devices powered by **Shizuku** (no root, no bootloader unlocking, no data wipe required). When a voice call arrives (such as via carrier-level call forwarding from a Safaricom line), the app:
 
 1. **Auto-answers** the call immediately via `InCallService`.
-2. **Captures caller voice audio** in real-time through a privileged `AudioRecord` tap (`VOICE_CALL` / `VOICE_DOWNLINK`).
+2. **Captures caller voice audio** in real-time through an ADB-level privileged `AudioRecord` tap (`VOICE_CALL` / `VOICE_DOWNLINK`) authorized via Shizuku.
 3. **Transcribes** caller speech locally on-device using Whisper (`whisper.cpp`).
 4. **Queries** OpenRouter's API for intelligent conversation response.
 5. **Synthesizes** voice locally on-device using Kokoro / Piper TTS.
@@ -13,71 +13,67 @@
 
 ## 📱 Device Requirements
 
-- **Chipset**: Qualcomm Snapdragon (recommended for standard audio HAL behavior).
-- **Root**: Magisk v24+ installed and active.
 - **Android Version**: Android 10 (API 29) through Android 15 (API 35).
+- **No Root Required**: Powered by Shizuku via ADB shell permissions.
 - **Permissions Required**:
-  - `android.permission.CAPTURE_AUDIO_OUTPUT` (granted via Magisk priv-app allowlist)
-  - `android.permission.CONTROL_INCALL_EXPERIENCE` (granted via Magisk priv-app allowlist)
+  - `android.permission.CAPTURE_AUDIO_OUTPUT` (granted via Shizuku ADB shell)
   - `android.permission.RECORD_AUDIO` (granted in app setup)
   - Default Dialer role (`RoleManager.ROLE_DIALER`)
 
 ---
 
-## 🛠️ Flashing & Installation via Magisk
+## 🛠️ Installation & Shizuku Setup
 
-1. **Build the Magisk Module Zip**:
-   ```bash
-   ./gradlew packageMagiskModule
-   ```
-   The flashable zip is generated at:
-   `app/build/outputs/magisk/AICallAgent-magisk.zip`
+1. **Install Shizuku**:
+   - Install **Shizuku** from Google Play Store or [GitHub Releases](https://github.com/RikkaApps/Shizuku/releases).
 
-2. **Flash onto Device**:
-   - Transfer `AICallAgent-magisk.zip` to the phone:
-     ```bash
-     adb push app/build/outputs/magisk/AICallAgent-magisk.zip /sdcard/Download/
-     ```
-   - Open the **Magisk App** on the device.
-   - Go to **Modules** → **Install from storage**.
-   - Select `AICallAgent-magisk.zip` and flash.
-   - **Reboot the device**.
+2. **Pair Shizuku Once**:
+   - **Option A — Wireless Debugging (Android 11+)**:
+     1. Open phone **Settings** → **Developer Options** → Enable **Wireless Debugging**.
+     2. Tap **Pair device with pairing code**.
+     3. Open **Shizuku**, tap **Pairing**, and enter the 6-digit code.
+     4. In Shizuku, tap **Start**.
+   - **Option B — USB Debugging (One-time PC connection)**:
+     1. Connect your phone to a computer with ADB installed.
+     2. Run the command:
+        ```bash
+        adb shell sh /sdcard/Android/data/moe.shizuku.privileged.api/start.sh
+        ```
 
-3. **Verify Privileged Permissions**:
-   After rebooting, check that the priv-app permissions were recognized:
-   ```bash
-   adb shell dumpsys package com.aicall.agent | grep -E "CAPTURE_AUDIO_OUTPUT|CONTROL_INCALL_EXPERIENCE"
-   ```
-   Both permissions must show as granted.
+3. **Install AICallAgent**:
+   - Install the signed APK normally (no Magisk, no recovery flashing, no data wipe).
 
-4. **Set as Default Dialer**:
-   - Open `AICallAgent` from the app launcher.
-   - Tap **"Grant Role"** under **System & Privileges** to set AICallAgent as the Default Dialer.
+4. **Grant Shizuku Permission**:
+   - Open **AICallAgent**.
+   - Under the **Shizuku Privileged Access** card, confirm the status shows **"Shizuku: Running & Authorized"** (or tap **"Grant Permission in Shizuku"** when prompted).
+
+5. **Set Default Dialer Role**:
+   - Tap **"Set Role"** under Telecom Default Dialer so AICallAgent can intercept and auto-answer calls.
+
+> ℹ️ **Note after device reboot**: After rebooting your phone, reopen the Shizuku app and tap **Start** before AICallAgent can capture call audio.
 
 ---
 
 ## 🔑 OpenRouter API Key Setup
 
-1. Open `AICallAgent`.
-2. Scroll to the **Agent Configuration** bento card.
-3. Enter your OpenRouter API key (`sk-or-v1-...`).
-4. Tap **Save Key**. The key is encrypted and stored in the hardware-backed Android Keystore via `EncryptedSharedPreferences`.
+1. Open `AICallAgent` and switch to the **Settings** tab.
+2. Enter your OpenRouter API key (`sk-or-v1-...`).
+3. Tap **Save Key**. The key is securely encrypted and stored in the Android Keystore via `EncryptedSharedPreferences`.
+4. Customize your AI Persona / System Prompt instructions as desired.
 
 ---
 
-## 🧪 Testing Phase 1 & 2 Milestones
+## 🧪 Testing Milestones
 
-### Phase 1: Auto-Answer Validation
-1. Enable **Auto-Answer Calls** switch in the UI.
+### Milestone 1: Auto-Answer Validation
+1. Enable **Auto-Answer Calls** in the Assistant tab.
 2. Dial the target phone number from another phone.
-3. Verify the call is automatically answered within 1-2 seconds without manual swipe.
-4. Tap **"End Call"** in the Hero Card to verify programmatic call termination.
+3. Verify the call is automatically answered within 1-2 seconds.
 
-### Phase 2: Privileged Audio Capture Validation
-1. Tap **"Test HAL (3s)"** in the UI to perform a quick 3-second capture test.
-2. Alternatively, place a real test call, speak for 5-10 seconds, and hang up.
-3. Pull the recorded WAV file to inspect audio quality:
+### Milestone 2: Audio Capture Validation
+1. Place a test call and speak for 10-15 seconds.
+2. Verify the call appears in the **History** tab with inline conversation transcription.
+3. Check recorded WAV audio in local storage:
    ```bash
    adb pull /sdcard/Android/data/com.aicall.agent/files/recordings/ ./test_recordings/
    ```
-4. Verify the recording contains clean caller voice audio.

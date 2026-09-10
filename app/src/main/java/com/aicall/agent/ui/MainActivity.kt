@@ -15,14 +15,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.aicall.agent.root.PrivilegedAudioAccess
+import com.aicall.agent.shizuku.ShizukuAudioAccess
+import com.aicall.agent.shizuku.ShizukuState
+import com.aicall.agent.shizuku.ShizukuStatusMonitor
 import com.aicall.agent.telecom.CallAnswerService
 import com.aicall.agent.telecom.DialerRoleManager
 import com.aicall.agent.ui.navigation.AICallMainApp
 import com.aicall.agent.ui.theme.AICallTheme
 import com.aicall.agent.util.Logger
 import com.aicall.agent.util.PreferencesManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import rikka.shizuku.Shizuku
 
 class MainActivity : ComponentActivity() {
 
@@ -30,7 +34,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var prefs: PreferencesManager
 
     private var isDefaultDialerState by mutableStateOf(false)
-    private var hasPrivAppPermissionsState by mutableStateOf(false)
     private var isAutoAnswerState by mutableStateOf(true)
     private var currentApiKeyState by mutableStateOf("")
     private var currentPromptState by mutableStateOf("")
@@ -54,6 +57,21 @@ class MainActivity : ComponentActivity() {
         updateDiagnosticStates()
     }
 
+    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+        if (requestCode == ShizukuAudioAccess.SHIZUKU_PERMISSION_REQUEST_CODE) {
+            if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Shizuku permission granted! Initializing audio tap...", Toast.LENGTH_SHORT).show()
+                ShizukuStatusMonitor.updateState()
+                lifecycleScope.launch(Dispatchers.IO) {
+                    ShizukuAudioAccess.grantCaptureAudioOutputViaShizuku(this@MainActivity)
+                }
+            } else {
+                Toast.makeText(this, "Shizuku permission denied.", Toast.LENGTH_SHORT).show()
+                ShizukuStatusMonitor.updateState()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -66,11 +84,20 @@ class MainActivity : ComponentActivity() {
         currentPromptState = prefs.systemPrompt
         selectedModelState = prefs.selectedModel
 
+        // Register Shizuku permission listener & start monitoring
+        try {
+            Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
+        } catch (e: Throwable) {
+            Logger.w("MainActivity", "Failed to add Shizuku permission listener: ${e.message}")
+        }
+        ShizukuStatusMonitor.startMonitoring()
+
         updateDiagnosticStates()
         requestInitialPermissions()
 
         setContent {
             val currentSession by CallAnswerService.currentSessionFlow.collectAsState()
+            val shizukuState by ShizukuStatusMonitor.shizukuState.collectAsState()
 
             AICallTheme {
                 AICallMainApp(
@@ -82,13 +109,20 @@ class MainActivity : ComponentActivity() {
                         Logger.i("MainActivity", "Auto-answer toggled: $enabled")
                     },
                     isDefaultDialer = isDefaultDialerState,
-                    hasPrivAppPermissions = hasPrivAppPermissionsState,
+                    shizukuState = shizukuState,
                     onRequestDialerRole = {
                         val intent = roleManager.createDefaultDialerIntent()
                         if (intent != null) {
                             dialerRoleLauncher.launch(intent)
                         } else {
                             Toast.makeText(this, "RoleManager not available on this device", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onRequestShizukuPermission = {
+                        if (ShizukuAudioAccess.isShizukuRunning()) {
+                            ShizukuAudioAccess.requestShizukuPermission()
+                        } else {
+                            Toast.makeText(this, "Shizuku is not running. Please open Shizuku and tap Start.", Toast.LENGTH_LONG).show()
                         }
                     },
                     currentApiKey = currentApiKeyState,
@@ -121,11 +155,18 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         updateDiagnosticStates()
+        ShizukuStatusMonitor.updateState()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
+        } catch (_: Throwable) {}
     }
 
     private fun updateDiagnosticStates() {
         isDefaultDialerState = roleManager.isDefaultDialer()
-        hasPrivAppPermissionsState = PrivilegedAudioAccess.hasPrivAppAudioPermission(this)
     }
 
     private fun requestInitialPermissions() {

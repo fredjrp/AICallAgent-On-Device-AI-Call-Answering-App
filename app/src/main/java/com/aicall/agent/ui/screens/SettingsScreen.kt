@@ -69,7 +69,9 @@ fun SettingsScreen(
     currentPrompt: String,
     onSavePrompt: (String) -> Unit,
     selectedModel: String,
-    onSelectModel: (String) -> Unit
+    onSelectModel: (String) -> Unit,
+    shizukuState: com.aicall.agent.shizuku.ShizukuState,
+    onRequestShizukuPermission: () -> Unit
 ) {
     val scrollState = rememberScrollState()
 
@@ -233,7 +235,15 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // Group 3: Answering Rules & Hardware
+        // Group 3: Shizuku Privileged Access & Instructions
+        com.aicall.agent.ui.components.ShizukuSetupCard(
+            state = shizukuState,
+            onRequestPermission = onRequestShizukuPermission
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // Group 4: Answering Rules & Hardware
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),

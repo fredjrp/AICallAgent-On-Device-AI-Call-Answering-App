@@ -60,21 +60,11 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || env.KEY_PASSWORD }}
         run: ./gradlew assembleRelease assembleDebug
 
-      - name: Build Magisk Module Zip
-        run: ./gradlew packageMagiskModule
-
       - name: Upload Signed APKs
         uses: actions/upload-artifact@v4
         with:
           name: AICallAgent-Signed-APKs
           path: app/build/outputs/apk/**/*.apk
-          retention-days: 14
-
-      - name: Upload Magisk Module Zip
-        uses: actions/upload-artifact@v4
-        with:
-          name: AICallAgent-Magisk-Module
-          path: app/build/outputs/magisk/*.zip
           retention-days: 14
 
       - name: Create GitHub Release (Tags only)
@@ -83,6 +73,5 @@ jobs:
         with:
           files: |
             app/build/outputs/apk/release/*.apk
-            app/build/outputs/magisk/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

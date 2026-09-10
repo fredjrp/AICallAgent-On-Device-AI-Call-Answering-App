@@ -70,8 +70,9 @@ fun AssistantScreen(
     isAutoAnswerEnabled: Boolean,
     onToggleAutoAnswer: (Boolean) -> Unit,
     isDefaultDialer: Boolean,
-    hasPrivAppPermissions: Boolean,
+    shizukuState: com.aicall.agent.shizuku.ShizukuState,
     onRequestDialerRole: () -> Unit,
+    onRequestShizukuPermission: () -> Unit,
     onTestAssistant: () -> Unit
 ) {
     val scrollState = rememberScrollState()
@@ -330,36 +331,16 @@ fun AssistantScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Magisk Priv-App check
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "Magisk Priv-App Audio Tap",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = if (hasPrivAppPermissions) "CAPTURE_AUDIO_OUTPUT active" else "Check Magisk module installation",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (hasPrivAppPermissions) ColorActive else ColorWarning
-                        )
-                    }
-
-                    Icon(
-                        imageVector = if (hasPrivAppPermissions) Icons.Default.CheckCircle else Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = if (hasPrivAppPermissions) ColorActive else ColorWarning,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Shizuku Setup & Diagnostics Card
+        com.aicall.agent.ui.components.ShizukuSetupCard(
+            state = shizukuState,
+            onRequestPermission = onRequestShizukuPermission
+        )
 
         Spacer(modifier = Modifier.height(20.dp))
 

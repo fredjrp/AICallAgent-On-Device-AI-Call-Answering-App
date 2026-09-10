@@ -73,8 +73,9 @@ fun AICallMainApp(
     isAutoAnswerEnabled: Boolean,
     onToggleAutoAnswer: (Boolean) -> Unit,
     isDefaultDialer: Boolean,
-    hasPrivAppPermissions: Boolean,
+    shizukuState: com.aicall.agent.shizuku.ShizukuState,
     onRequestDialerRole: () -> Unit,
+    onRequestShizukuPermission: () -> Unit,
     currentApiKey: String,
     onSaveApiKey: (String) -> Unit,
     currentPrompt: String,
@@ -106,8 +107,9 @@ fun AICallMainApp(
                     isAutoAnswerEnabled = isAutoAnswerEnabled,
                     onToggleAutoAnswer = onToggleAutoAnswer,
                     isDefaultDialer = isDefaultDialer,
-                    hasPrivAppPermissions = hasPrivAppPermissions,
+                    shizukuState = shizukuState,
                     onRequestDialerRole = onRequestDialerRole,
+                    onRequestShizukuPermission = onRequestShizukuPermission,
                     onTestAssistant = onTestAssistant
                 )
                 Screen.SETTINGS -> SettingsScreen(
@@ -116,7 +118,9 @@ fun AICallMainApp(
                     currentPrompt = currentPrompt,
                     onSavePrompt = onSavePrompt,
                     selectedModel = selectedModel,
-                    onSelectModel = onSelectModel
+                    onSelectModel = onSelectModel,
+                    shizukuState = shizukuState,
+                    onRequestShizukuPermission = onRequestShizukuPermission
                 )
             }
         }

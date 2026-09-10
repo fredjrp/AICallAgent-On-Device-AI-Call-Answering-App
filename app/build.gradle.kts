@@ -101,6 +101,10 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
+    // Shizuku Privileged API & Provider
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+
     // Security & Networking
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
@@ -113,30 +117,4 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.12")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
-}
-
-// Task to build the Magisk Priv-App Module Zip
-tasks.register<Zip>("packageMagiskModule") {
-    group = "magisk"
-    description = "Packages the AICallAgent app and permissions into a flashable Magisk module zip"
-
-    archiveFileName.set("AICallAgent-magisk.zip")
-    destinationDirectory.set(file("${layout.buildDirectory.get()}/outputs/magisk"))
-
-    val magiskDir = rootProject.file("magisk-module")
-
-    from(File(magiskDir, "module.prop"))
-    from(File(magiskDir, "service.sh"))
-    from(File(magiskDir, "customize.sh"))
-
-    from(File(magiskDir, "system/etc/permissions/privapp-permissions-aicallagent.xml")) {
-        into("system/etc/permissions")
-    }
-
-    from(fileTree("${layout.buildDirectory.get()}/outputs/apk") {
-        include("**/*.apk")
-    }) {
-        into("system/priv-app/AICallAgent")
-        rename { "AICallAgent.apk" }
-    }
 }

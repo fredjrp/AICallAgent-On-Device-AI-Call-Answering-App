@@ -16,7 +16,7 @@ import kotlin.math.sqrt
  * Captures live voice stream using AudioRecord with MediaRecorder.AudioSource.VOICE_CALL.
  *
  * HAL/Permission notes:
- * - VOICE_CALL requires CAPTURE_AUDIO_OUTPUT (protected permission granted via Magisk priv-app).
+ * - VOICE_CALL requires CAPTURE_AUDIO_OUTPUT (protected permission granted via Shizuku ADB shell).
  * - On Qualcomm chipsets, some OEM audio HALs mix uplink and downlink audio into VOICE_CALL;
  *   others provide downlink only. If VOICE_CALL produces error (-38) or empty frames,
  *   we attempt negotiation with VOICE_DOWNLINK.
