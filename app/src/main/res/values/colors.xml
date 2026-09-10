@@ -1,30 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Backgrounds (OLED Deep Slate) -->
-    <color name="bg_canvas">#0A0E17</color>
-    <color name="bg_card">#111827</color>
-    <color name="bg_card_highlight">#1F293D</color>
-    <color name="border_card">#1E293B</color>
-    <color name="border_card_active">#10B981</color>
+    <!-- Backgrounds (Apple-inspired Light Canvas) -->
+    <color name="bg_canvas">#F9FAFB</color>
+    <color name="bg_card">#FFFFFF</color>
+    <color name="bg_card_highlight">#F2F2F7</color>
+    <color name="border_card">#E5E7EB</color>
+    <color name="border_card_active">#34C759</color>
 
     <!-- Typography -->
-    <color name="text_primary">#F8FAFC</color>
-    <color name="text_secondary">#94A3B8</color>
-    <color name="text_muted">#64748B</color>
+    <color name="text_primary">#111827</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="text_muted">#9CA3AF</color>
 
     <!-- Brand Accents -->
-    <color name="brand_indigo">#6366F1</color>
-    <color name="brand_indigo_light">#818CF8</color>
-    <color name="brand_emerald">#10B981</color>
-    <color name="brand_emerald_glow">#059669</color>
-    <color name="brand_amber">#F59E0B</color>
-    <color name="brand_rose">#EF4444</color>
+    <color name="brand_purple">#8950E5</color>
+    <color name="brand_cyan">#00B6F9</color>
+    <color name="brand_green">#34C759</color>
+    <color name="brand_amber">#FF9500</color>
+    <color name="brand_red">#FF3B30</color>
 
     <!-- Status Badges -->
-    <color name="badge_success_bg">#064E3B</color>
-    <color name="badge_success_text">#34D399</color>
-    <color name="badge_warning_bg">#78350F</color>
-    <color name="badge_warning_text">#FBBF24</color>
-    <color name="badge_neutral_bg">#1E293B</color>
-    <color name="badge_neutral_text">#94A3B8</color>
+    <color name="badge_success_bg">#E8F8EE</color>
+    <color name="badge_success_text">#34C759</color>
+    <color name="badge_warning_bg">#FFF4E5</color>
+    <color name="badge_warning_text">#FF9500</color>
+    <color name="badge_neutral_bg">#F2F2F7</color>
+    <color name="badge_neutral_text">#6B7280</color>
 </resources>
