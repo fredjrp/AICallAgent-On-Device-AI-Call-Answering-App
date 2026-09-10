@@ -110,7 +110,7 @@ class InCallActivity : ComponentActivity() {
                     session = session,
                     onAnswer = { CallAnswerService.answerCurrentCall() },
                     onDecline = {
-                        CallAnswerService.endCurrentCall()
+                        CallAnswerService.hangUpCurrentCall()
                         finishAndRemoveTask()
                     }
                 )
