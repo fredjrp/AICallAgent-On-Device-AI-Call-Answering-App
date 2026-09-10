@@ -15,8 +15,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import rikka.shizuku.Shizuku
-import java.io.BufferedReader
-import java.io.InputStreamReader
 
 /**
  * High-level Shizuku state enumeration for UI and lifecycle monitoring.
@@ -117,33 +115,6 @@ object ShizukuAudioAccess {
             }
         } catch (e: Throwable) {
             Logger.e(TAG, "Failed to request Shizuku permission", tr = e)
-        }
-    }
-
-    /**
-     * Uses Shizuku's ADB shell privilege to grant CAPTURE_AUDIO_OUTPUT to this app package.
-     */
-    fun grantCaptureAudioOutputViaShizuku(context: Context): Boolean {
-        if (!hasShizukuPermission()) {
-            Logger.w(TAG, "Cannot grant CAPTURE_AUDIO_OUTPUT: Shizuku permission not granted")
-            return false
-        }
-        return try {
-            val packageName = context.packageName
-            val command = "pm grant $packageName android.permission.CAPTURE_AUDIO_OUTPUT"
-            val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
-            val exitCode = process.waitFor()
-            val success = exitCode == 0
-            if (success) {
-                Logger.i(TAG, "Successfully granted CAPTURE_AUDIO_OUTPUT via Shizuku shell")
-            } else {
-                val err = BufferedReader(InputStreamReader(process.errorStream)).readText()
-                Logger.w(TAG, "pm grant CAPTURE_AUDIO_OUTPUT returned exit code $exitCode: $err")
-            }
-            success
-        } catch (e: Throwable) {
-            Logger.e(TAG, "Failed to execute pm grant via Shizuku", tr = e)
-            false
         }
     }
 }

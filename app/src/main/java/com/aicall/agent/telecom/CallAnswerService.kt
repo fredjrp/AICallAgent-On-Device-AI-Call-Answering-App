@@ -172,11 +172,6 @@ class CallAnswerService : InCallService() {
         } else if (!com.aicall.agent.shizuku.ShizukuAudioAccess.hasShizukuPermission()) {
             Logger.w(tag, "Shizuku permission not granted for AICallAgent", session.sessionId)
             postShizukuAlert("Shizuku Permission Required", "Grant AICallAgent permission in Shizuku.")
-        } else {
-            // Ensure CAPTURE_AUDIO_OUTPUT is granted
-            if (!com.aicall.agent.shizuku.ShizukuAudioAccess.hasCaptureAudioOutputPermission(this)) {
-                com.aicall.agent.shizuku.ShizukuAudioAccess.grantCaptureAudioOutputViaShizuku(this)
-            }
         }
 
         // Start audio capture

@@ -60,11 +60,8 @@ class MainActivity : ComponentActivity() {
     private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
         if (requestCode == ShizukuAudioAccess.SHIZUKU_PERMISSION_REQUEST_CODE) {
             if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Shizuku permission granted! Initializing audio tap...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Shizuku permission granted! Audio tap ready.", Toast.LENGTH_SHORT).show()
                 ShizukuStatusMonitor.updateState()
-                lifecycleScope.launch(Dispatchers.IO) {
-                    ShizukuAudioAccess.grantCaptureAudioOutputViaShizuku(this@MainActivity)
-                }
             } else {
                 Toast.makeText(this, "Shizuku permission denied.", Toast.LENGTH_SHORT).show()
                 ShizukuStatusMonitor.updateState()
