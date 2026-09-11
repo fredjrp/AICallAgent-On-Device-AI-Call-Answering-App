@@ -157,15 +157,8 @@ class CallAnswerService : InCallService() {
             }
         }
 
-        // Launch In-Call UI Activity
-        try {
-            val inCallIntent = Intent(this, com.aicall.agent.ui.InCallActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            }
-            startActivity(inCallIntent)
-        } catch (e: Exception) {
-            Logger.w(tag, "Could not launch InCallActivity directly: ${e.message}")
-        }
+        // Launch In-Call UI Activity with full-screen intent (wakes lock screen & works when app is closed)
+        showIncomingCallUi(call, session)
 
         val callback = object : Call.Callback() {
             override fun onStateChanged(targetCall: Call, state: Int) {
@@ -199,7 +192,12 @@ class CallAnswerService : InCallService() {
                 ringTimers.remove(targetCall)?.let { mainHandler.removeCallbacks(it) }
                 if (activeCall == targetCall) {
                     activeCall = null
-                    _currentSessionFlow.value = null
+                    // Keep session in DISCONNECTED state for 25 seconds so InCallActivity can display AfterCallSummarySheet
+                    mainHandler.postDelayed({
+                        if (activeCall == null) {
+                            _currentSessionFlow.value = null
+                        }
+                    }, 25000L)
                 }
             }
         }
@@ -365,14 +363,99 @@ class CallAnswerService : InCallService() {
         session.endTimeMs = System.currentTimeMillis()
         notifyListeners { it.onCallDisconnected(session.sessionId, call, call.details?.disconnectCause?.toString()) }
 
-        fileCallRecord(session)
+        val record = fileCallRecord(session)
+
+        // Keep session in DISCONNECTED state so InCallActivity transitions to AfterCallSummarySheet
+        session.state = Call.STATE_DISCONNECTED
+        _currentSessionFlow.value = session.copy(state = Call.STATE_DISCONNECTED)
+
+        // Launch Truecaller post-call summary banner (works over lockscreen & when other apps are open)
+        showAfterCallSummaryUi(record.id)
 
         try {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } catch (_: Exception) {}
     }
 
-    private fun fileCallRecord(session: CallSession) {
+    private fun showIncomingCallUi(call: Call, session: CallSession) {
+        try {
+            val inCallIntent = Intent(this, com.aicall.agent.ui.InCallActivity::class.java).apply {
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+                )
+            }
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val fullScreenPendingIntent = PendingIntent.getActivity(this, 1001, inCallIntent, flags)
+
+            val callerTitle = if (!session.callerName.isNullOrBlank()) session.callerName!! else session.phoneNumber
+            val notification = NotificationCompat.Builder(this, AICallApplication.CHANNEL_ID_INCALL)
+                .setContentTitle(callerTitle)
+                .setContentText("Incoming call • Front Desk standing by")
+                .setSmallIcon(android.R.drawable.ic_menu_call)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setFullScreenIntent(fullScreenPendingIntent, true)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                .setContentIntent(fullScreenPendingIntent)
+                .build()
+
+            val notificationManager = getSystemService(android.app.NotificationManager::class.java)
+            notificationManager?.notify(AICallApplication.NOTIFICATION_ID_INCALL, notification)
+
+            startActivity(inCallIntent)
+        } catch (e: Exception) {
+            Logger.w(tag, "Failed to launch incoming call UI: ${e.message}")
+        }
+    }
+
+    private fun showAfterCallSummaryUi(recordId: String) {
+        try {
+            val intent = Intent(this, com.aicall.agent.ui.InCallActivity::class.java).apply {
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+                )
+                putExtra(com.aicall.agent.ui.InCallActivity.EXTRA_SHOW_SUMMARY, true)
+                putExtra(com.aicall.agent.ui.InCallActivity.EXTRA_RECORD_ID, recordId)
+            }
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val pendingIntent = PendingIntent.getActivity(this, 1002, intent, flags)
+
+            val notification = NotificationCompat.Builder(this, AICallApplication.CHANNEL_ID_INCALL)
+                .setContentTitle("Call Finished")
+                .setContentText("Tap to view Front Desk call summary")
+                .setSmallIcon(android.R.drawable.ic_menu_info_details)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setFullScreenIntent(pendingIntent, true)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .build()
+
+            val notificationManager = getSystemService(android.app.NotificationManager::class.java)
+            notificationManager?.notify(AICallApplication.NOTIFICATION_ID_INCALL, notification)
+
+            startActivity(intent)
+        } catch (e: Exception) {
+            Logger.w(tag, "Could not launch after-call summary: ${e.message}")
+        }
+    }
+
+    private fun fileCallRecord(session: CallSession): CallRecord {
         val repo = CallHistoryRepository.getInstance(this)
         val currentTranscript = orchestrator?.getCurrentTranscript() ?: emptyList()
         val currentActions = orchestrator?.getCurrentActions() ?: emptyList()
@@ -413,6 +496,7 @@ class CallAnswerService : InCallService() {
         repo.saveRecord(record)
         addCompletedSession(session)
         Logger.i(tag, "Call record filed to repository: ${record.id}, handledBy=${record.handledBy}, outcome=$outcome")
+        return record
     }
 
     private fun extractPhoneNumber(call: Call): String {

@@ -81,10 +81,48 @@ import kotlinx.coroutines.delay
 
 class InCallActivity : ComponentActivity() {
 
+    companion object {
+        const val EXTRA_SHOW_SUMMARY = "extra_show_summary"
+        const val EXTRA_RECORD_ID = "extra_record_id"
+    }
+
+    private val showSummaryState = mutableStateOf(false)
+    private val recordIdState = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        wakeAndUnlockScreen()
+        handleIntent(intent)
 
-        // ── Wake screen and show over lock screen ─────────────────────────
+        setContent {
+            AICallTheme {
+                InCallActivityRoot(
+                    initialShowSummary = showSummaryState.value,
+                    initialRecordId = recordIdState.value,
+                    onFinish = { finishAndRemoveTask() }
+                )
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        wakeAndUnlockScreen()
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent == null) return
+        val showSummary = intent.getBooleanExtra(EXTRA_SHOW_SUMMARY, false)
+        val recordId = intent.getStringExtra(EXTRA_RECORD_ID)
+        if (showSummary || !recordId.isNullOrBlank()) {
+            showSummaryState.value = true
+            recordIdState.value = recordId
+        }
+    }
+
+    private fun wakeAndUnlockScreen() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -99,12 +137,6 @@ class InCallActivity : ComponentActivity() {
             )
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-        setContent {
-            AICallTheme {
-                InCallActivityRoot(onFinish = { finishAndRemoveTask() })
-            }
-        }
     }
 }
 
@@ -113,30 +145,44 @@ class InCallActivity : ComponentActivity() {
  * ACTIVE_CALL -> (on disconnect) -> AFTER_CALL_SUMMARY -> (on dismiss) -> finish()
  */
 @Composable
-private fun InCallActivityRoot(onFinish: () -> Unit) {
+private fun InCallActivityRoot(
+    initialShowSummary: Boolean = false,
+    initialRecordId: String? = null,
+    onFinish: () -> Unit
+) {
     val context = LocalContext.current
     val session by CallAnswerService.currentSessionFlow.collectAsState()
 
     // ── UI state: active call or after-call summary ───────────────────────
-    var showAfterCallSummary by remember { mutableStateOf(false) }
-    var completedRecord by remember { mutableStateOf<CallRecord?>(null) }
+    var showAfterCallSummary by remember(initialShowSummary) { mutableStateOf(initialShowSummary) }
+    var completedRecord by remember(initialRecordId) {
+        mutableStateOf<CallRecord?>(
+            if (!initialRecordId.isNullOrBlank()) {
+                CallHistoryRepository.getInstance(context).getRecordById(initialRecordId)
+            } else null
+        )
+    }
 
     // Watch for call disconnect -> transition to summary rather than finishing
     LaunchedEffect(session) {
         if (session != null && session?.state == android.telecom.Call.STATE_DISCONNECTED) {
-            // Give the repo a moment to finish writing the record
-            delay(600)
+            delay(300)
             val repo = CallHistoryRepository.getInstance(context)
-            completedRecord = session?.let { s -> repo.getRecordById(s.sessionId) }
-            showAfterCallSummary = true
+            val rec = session?.let { s -> repo.getRecordById(s.sessionId) }
+            if (rec != null) {
+                completedRecord = rec
+                showAfterCallSummary = true
+            }
         }
     }
 
-    // If session disappears entirely with no record, just finish
+    // Grace period for session cleanup: never dismiss immediately if summary is showing or pending
     LaunchedEffect(session, showAfterCallSummary) {
         if (session == null && !showAfterCallSummary) {
-            delay(400)
-            onFinish()
+            delay(5000)
+            if (!showAfterCallSummary && CallAnswerService.activeCall == null) {
+                onFinish()
+            }
         }
     }
 

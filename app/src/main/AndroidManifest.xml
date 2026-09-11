@@ -28,10 +28,12 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"
         tools:ignore="SystemPermissionTypo" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
 
     <application
         android:name=".AICallApplication"
@@ -71,12 +73,15 @@
             </intent-filter>
         </activity>
 
-        <!-- In-Call UI Activity (displayed during incoming and active calls) -->
+        <!-- In-Call UI Activity (displayed during incoming and active calls, and post-call banner) -->
         <activity
             android:name=".ui.InCallActivity"
-            android:exported="false"
+            android:exported="true"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
+            android:showOnLockScreen="true"
+            android:inheritShowWhenLocked="true"
+            android:excludeFromRecents="true"
             android:launchMode="singleInstance"
             android:theme="@style/Theme.AICallAgent" />
 

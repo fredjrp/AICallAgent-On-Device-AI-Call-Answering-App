@@ -29,11 +29,12 @@ class AICallApplication : Application() {
 
             val inCallChannel = NotificationChannel(
                 CHANNEL_ID_INCALL,
-                "In-Call AI Service",
-                NotificationManager.IMPORTANCE_LOW
+                "In-Call Phone Service",
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Foreground service notification for live call audio processing"
-                setSound(null, null)
+                description = "Incoming calls and live telephone answering"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setShowBadge(true)
             }
             notificationManager?.createNotificationChannel(inCallChannel)
 
