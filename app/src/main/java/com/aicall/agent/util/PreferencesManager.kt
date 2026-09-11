@@ -81,6 +81,11 @@ class PreferencesManager(context: Context) {
         get() = sharedPreferences.getInt(KEY_DAILY_BRIEFING_HOUR, 18) // 6:00 PM default
         set(value) = sharedPreferences.edit().putInt(KEY_DAILY_BRIEFING_HOUR, value).apply()
 
+    /** True when the user has explicitly enabled speakerphone via the in-call UI toggle. */
+    var speakerphoneEnabled: Boolean
+        get() = sharedPreferences.getBoolean(KEY_SPEAKERPHONE_ENABLED, false)
+        set(value) = sharedPreferences.edit().putBoolean(KEY_SPEAKERPHONE_ENABLED, value).apply()
+
     companion object {
         private const val KEY_OPENROUTER_API_KEY = "key_openrouter_api_key"
         private const val KEY_SYSTEM_PROMPT = "key_system_prompt"
@@ -95,6 +100,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_ECHO_CANCELLATION = "key_echo_cancellation"
         private const val KEY_AUTO_DISCONNECT_SECONDS = "key_auto_disconnect_seconds"
         private const val KEY_DAILY_BRIEFING_HOUR = "key_daily_briefing_hour"
+        private const val KEY_SPEAKERPHONE_ENABLED = "key_speakerphone_enabled"
 
         const val DEFAULT_SYSTEM_PROMPT =
             "You are a helpful and polite voice AI phone assistant for Front Desk. " +

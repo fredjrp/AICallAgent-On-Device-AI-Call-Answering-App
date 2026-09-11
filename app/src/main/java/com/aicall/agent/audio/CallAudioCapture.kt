@@ -59,30 +59,64 @@ class CallAudioCapture(
         // Use 4x buffer to withstand CPU spikes under load without dropped frames
         val internalBufferSize = minBufferSize * 4
 
-        Logger.i(tag, "Initializing AudioRecord: source=$audioSource, rate=$sampleRate, buffer=$internalBufferSize", sessionId)
+        /**
+         * Multi-tier HAL fallback matrix for OEM chipset compatibility:
+         *   Tier 1: VOICE_CALL        — captures full two-way call audio (requires Shizuku/priv-app)
+         *   Tier 2: VOICE_DOWNLINK    — captures only the remote (downlink) audio stream
+         *   Tier 3: VOICE_COMMUNICATION — echo-cancelled VoIP pipeline, widely supported
+         *   Tier 4: MIC               — last-resort acoustic near-field capture
+         *
+         * We try each tier in order; the first one that initialises successfully wins.
+         */
+        val fallbackSources = buildList {
+            add(audioSource) // User-configured source (default: VOICE_CALL)
+            if (audioSource != MediaRecorder.AudioSource.VOICE_DOWNLINK)
+                add(MediaRecorder.AudioSource.VOICE_DOWNLINK)
+            if (audioSource != MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                add(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+            if (audioSource != MediaRecorder.AudioSource.MIC)
+                add(MediaRecorder.AudioSource.MIC)
+        }
 
-        val recordInstance: AudioRecord = try {
-            AudioRecord(
-                audioSource,
-                sampleRate,
-                channelConfig,
-                audioFormat,
-                internalBufferSize
-            )
-        } catch (e: Exception) {
-            Logger.e(tag, "Failed to instantiate AudioRecord for source $audioSource", sessionId, e)
+        var recordInstance: AudioRecord? = null
+        var usedSource = audioSource
+
+        for (source in fallbackSources) {
+            try {
+                val candidate = AudioRecord(
+                    source,
+                    sampleRate,
+                    channelConfig,
+                    audioFormat,
+                    internalBufferSize
+                )
+                if (candidate.state == AudioRecord.STATE_INITIALIZED) {
+                    recordInstance = candidate
+                    usedSource = source
+                    if (source != audioSource) {
+                        Logger.w(tag, "HAL fallback: primary source $audioSource failed; using source $source", sessionId)
+                    } else {
+                        Logger.i(tag, "AudioRecord initialized with source $source", sessionId)
+                    }
+                    break
+                } else {
+                    Logger.w(tag, "AudioRecord source $source not initialized (state=${candidate.state}); trying next tier", sessionId)
+                    candidate.release()
+                }
+            } catch (e: Exception) {
+                Logger.w(tag, "AudioRecord source $source threw exception: ${e.message}; trying next tier", sessionId)
+            }
+        }
+
+        if (recordInstance == null) {
+            Logger.e(tag, "All AudioRecord sources exhausted — cannot capture audio for session $sessionId", sessionId)
             isCapturing.set(false)
             return false
         }
 
-        if (recordInstance.state != AudioRecord.STATE_INITIALIZED) {
-            Logger.e(tag, "AudioRecord failed to initialize (state=${recordInstance.state}). Check CAPTURE_AUDIO_OUTPUT priv-app permission!", sessionId)
-            recordInstance.release()
-            isCapturing.set(false)
-            return false
-        }
-
-        audioRecord = recordInstance
+        // Non-null guaranteed by the early-return check above
+        val confirmedRecord: AudioRecord = recordInstance
+        audioRecord = confirmedRecord
 
         captureThread = Thread({
             Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
@@ -98,11 +132,11 @@ class CallAudioCapture(
             var totalSamplesRead = 0L
 
             try {
-                recordInstance.startRecording()
-                Logger.i(tag, "AudioRecord started recording to ${outputFile.name}", sessionId)
+                confirmedRecord.startRecording()
+                Logger.i(tag, "AudioRecord started recording to ${outputFile.name} (source=$usedSource)", sessionId)
 
                 while (isCapturing.get()) {
-                    val readCount = recordInstance.read(readBuffer, 0, readBuffer.size)
+                    val readCount = confirmedRecord.read(readBuffer, 0, readBuffer.size)
                     if (readCount > 0) {
                         fileWriter.write(readBuffer, readCount)
                         totalSamplesRead += readCount
@@ -132,11 +166,11 @@ class CallAudioCapture(
                 Logger.e(tag, "Exception in audio capture loop", sessionId, e)
             } finally {
                 try {
-                    recordInstance.stop()
+                    confirmedRecord.stop()
                 } catch (e: Exception) {
                     Logger.w(tag, "Error stopping AudioRecord", sessionId, e)
                 }
-                recordInstance.release()
+                confirmedRecord.release()
                 audioRecord = null
                 fileWriter.close()
 

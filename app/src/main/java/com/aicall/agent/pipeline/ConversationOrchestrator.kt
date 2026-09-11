@@ -162,14 +162,30 @@ class ConversationOrchestrator(
                     return@launch
                 }
 
-                // 2. LLM (OpenRouter API)
+                // 2. LLM (OpenRouter API) — with timeout and offline fallback
                 _stateFlow.value = ConversationState.THINKING
                 Logger.i(tag, "Querying OpenRouter API for response...", sessionId)
 
-                val result = openRouterClient.chatWithUsage(
-                    conversationHistory = conversationHistory.toList(),
-                    systemPrompt = systemPrompt
-                )
+                val result = try {
+                    kotlinx.coroutines.withTimeout(OPENROUTER_TIMEOUT_MS) {
+                        openRouterClient.chatWithUsage(
+                            conversationHistory = conversationHistory.toList(),
+                            systemPrompt = systemPrompt
+                        )
+                    }
+                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                    Logger.w(tag, "OpenRouter API timed out after ${OPENROUTER_TIMEOUT_MS}ms. Engaging offline fallback.", sessionId)
+                    deliverOfflineFallback(sessionId)
+                    return@launch
+                } catch (e: java.io.IOException) {
+                    Logger.w(tag, "OpenRouter network error (offline/unreachable): ${e.message}. Engaging offline fallback.", sessionId)
+                    deliverOfflineFallback(sessionId)
+                    return@launch
+                } catch (e: Exception) {
+                    Logger.e(tag, "Unexpected error querying OpenRouter", sessionId, e)
+                    deliverOfflineFallback(sessionId)
+                    return@launch
+                }
 
                 totalPromptTokens += result.promptTokens
                 totalCompletionTokens += result.completionTokens
@@ -220,6 +236,38 @@ class ConversationOrchestrator(
         }
     }
 
+    /**
+     * Delivers a polite, pre-built offline fallback speech response when the network
+     * is unreachable or the LLM API times out. This ensures zero-silent-drop: the caller
+     * always hears a human-like graceful message rather than dead air.
+     */
+    private suspend fun deliverOfflineFallback(sessionId: String) {
+        try {
+            val fallbackText = OFFLINE_FALLBACK_MESSAGE
+            Logger.i(tag, "Delivering offline fallback: \"$fallbackText\"", sessionId)
+
+            val fallbackMsg = CallTranscriptMessage(
+                speaker = "agent",
+                name = "Front Desk",
+                text = fallbackText,
+                timestampMs = System.currentTimeMillis()
+            )
+            _liveMessages.value = _liveMessages.value + fallbackMsg
+            conversationHistory.add(OpenRouterClient.Message("assistant", fallbackText))
+
+            _stateFlow.value = ConversationState.SYNTHESIZING
+            val speechPcm = textToSpeech.synthesize(fallbackText)
+            if (speechPcm.isNotEmpty()) {
+                _stateFlow.value = ConversationState.SPEAKING
+                audioPlayback.playAudio(speechPcm, sampleRate = textToSpeech.sampleRate)
+            }
+        } catch (e: Exception) {
+            Logger.e(tag, "Failed to deliver offline fallback speech", sessionId, e)
+        } finally {
+            _stateFlow.value = ConversationState.LISTENING
+        }
+    }
+
     private fun detectAndAddAction(callerText: String, agentText: String) {
         val lower = (callerText + " " + agentText).lowercase()
         when {
@@ -252,4 +300,16 @@ class ConversationOrchestrator(
 
     fun getCurrentTranscript(): List<CallTranscriptMessage> = _liveMessages.value
     fun getCurrentActions(): List<CallActionItem> = _liveActions.value
+
+    companion object {
+        /** Maximum time (ms) to wait for an OpenRouter API response before engaging offline fallback. */
+        private const val OPENROUTER_TIMEOUT_MS = 5_000L
+
+        /**
+         * Offline graceful fallback message spoken by TTS when the network is unavailable
+         * or the LLM API times out. Designed to be calm, professional, and actionable.
+         */
+        const val OFFLINE_FALLBACK_MESSAGE =
+            "I am having a little trouble with my connection right now, but please leave your name and message and our team will get back to you promptly."
+    }
 }

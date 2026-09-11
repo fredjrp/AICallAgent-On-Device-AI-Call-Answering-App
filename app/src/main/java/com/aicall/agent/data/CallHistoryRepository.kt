@@ -67,6 +67,13 @@ class CallHistoryRepository(private val context: Context) {
     private val tag = "CallHistoryRepository"
     private val historyFile = File(context.filesDir, "call_history_records.json")
 
+    /**
+     * In-memory index: cleaned phone number → list of call records.
+     * Built once on load and kept in sync on every save so that incoming-ring
+     * caller lookups are O(1) instead of O(n) list scans.
+     */
+    private val numberIndex = HashMap<String, MutableList<CallRecord>>()
+
     private val _recordsFlow = MutableStateFlow<List<CallRecord>>(emptyList())
     val recordsFlow: StateFlow<List<CallRecord>> = _recordsFlow.asStateFlow()
 
@@ -88,12 +95,26 @@ class CallHistoryRepository(private val context: Context) {
                 val obj = arr.getJSONObject(i)
                 list.add(parseRecord(obj))
             }
-            _recordsFlow.value = list.sortedByDescending { it.timestampMs }
+            val sorted = list.sortedByDescending { it.timestampMs }
+            _recordsFlow.value = sorted
+            rebuildIndex(sorted)
         } catch (e: Exception) {
             Logger.e(tag, "Failed to load call history", tr = e)
             _recordsFlow.value = emptyList()
         }
     }
+
+    /** Rebuilds the number → records index from scratch. Called after load and save. */
+    private fun rebuildIndex(records: List<CallRecord>) {
+        numberIndex.clear()
+        for (record in records) {
+            val key = cleanNumber(record.callerNumber)
+            numberIndex.getOrPut(key) { mutableListOf() }.add(record)
+        }
+    }
+
+    private fun cleanNumber(number: String): String =
+        number.replace(Regex("[^0-9+]"), "")
 
     @Synchronized
     fun saveRecord(record: CallRecord) {
@@ -104,19 +125,23 @@ class CallHistoryRepository(private val context: Context) {
         } else {
             current.add(0, record)
         }
-        _recordsFlow.value = current.sortedByDescending { it.timestampMs }
-        persistToFile(current)
+        val sorted = current.sortedByDescending { it.timestampMs }
+        _recordsFlow.value = sorted
+        rebuildIndex(sorted)
+        persistToFile(sorted)
     }
 
     fun getRecordById(id: String): CallRecord? {
         return _recordsFlow.value.firstOrNull { it.id == id }
     }
 
+    /**
+     * O(1) lookup using the in-memory number index.
+     * Falls back to linear scan if the index is empty (e.g. first call ever).
+     */
     fun getRecordsForContact(phoneNumber: String): List<CallRecord> {
-        val clean = phoneNumber.replace(Regex("[^0-9+]"), "")
-        return _recordsFlow.value.filter {
-            it.callerNumber.replace(Regex("[^0-9+]"), "") == clean
-        }
+        val clean = cleanNumber(phoneNumber)
+        return numberIndex[clean] ?: _recordsFlow.value.filter { cleanNumber(it.callerNumber) == clean }
     }
 
     fun getTodayStats(): Triple<Int, String, Int> {
@@ -137,8 +162,21 @@ class CallHistoryRepository(private val context: Context) {
 
     private fun persistToFile(records: List<CallRecord>) {
         try {
+            val capped = records.take(MAX_SAVED_RECORDS)
+            val pruned = if (records.size > MAX_SAVED_RECORDS) records.drop(MAX_SAVED_RECORDS) else emptyList()
+
+            // Purge deleted WAV files to protect device storage
+            for (p in pruned) {
+                p.recordingPath?.let { path ->
+                    try {
+                        val f = File(path)
+                        if (f.exists()) f.delete()
+                    } catch (_: Exception) {}
+                }
+            }
+
             val arr = JSONArray()
-            for (r in records.take(200)) { // Keep last 200 calls on-device
+            for (r in capped) {
                 arr.put(toJson(r))
             }
             historyFile.writeText(arr.toString())
@@ -242,6 +280,8 @@ class CallHistoryRepository(private val context: Context) {
     }
 
     companion object {
+        const val MAX_SAVED_RECORDS = 100
+
         @Volatile
         private var instance: CallHistoryRepository? = null
 

@@ -94,6 +94,34 @@ class CallAnswerService : InCallService() {
         com.aicall.agent.shizuku.ShizukuStatusMonitor.stopMonitoring()
     }
 
+    /**
+     * Phase 3 — Telecom Audio Route Sync.
+     *
+     * The Android Telecom framework notifies us whenever audio routing changes
+     * (e.g. Bluetooth connected, speaker toggled by system, headset plugged in).
+     * We enforce ROUTE_EARPIECE here so the AI voice is always played through
+     * the internal earpiece for natural telephone call acoustics, unless the user
+     * has explicitly chosen a different route via the in-call UI speaker toggle.
+     */
+    override fun onCallAudioStateChanged(audioState: android.telecom.CallAudioState) {
+        super.onCallAudioStateChanged(audioState)
+        val prefs = PreferencesManager.getInstance(this)
+        // Only enforce earpiece if the user has NOT toggled speaker-on in the UI.
+        // We use a lightweight flag stored in PreferencesManager.
+        val userWantsSpeaker = prefs.speakerphoneEnabled
+        if (!userWantsSpeaker &&
+            audioState.route != android.telecom.CallAudioState.ROUTE_EARPIECE &&
+            audioState.supportedRouteMask and android.telecom.CallAudioState.ROUTE_EARPIECE != 0
+        ) {
+            try {
+                setAudioRoute(android.telecom.CallAudioState.ROUTE_EARPIECE)
+                Logger.i(tag, "Audio route enforced: ROUTE_EARPIECE (was route=${audioState.route})")
+            } catch (e: Exception) {
+                Logger.w(tag, "Failed to set audio route to EARPIECE: ${e.message}")
+            }
+        }
+    }
+
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         val sessionId = "call_${System.currentTimeMillis().toString().takeLast(6)}_${UUID.randomUUID().toString().take(4)}"

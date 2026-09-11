@@ -42,3 +42,7 @@ val SurfaceCanvas     = BgTop
 val BrandPurple       = GreenDeep
 val BrandCyan         = GreenPrimary
 val BrandMid          = GreenSoft
+
+// Semantic convenience aliases (used in AfterCallSummarySheet + after-call UI)
+val AccentAmber       = ColorWarning   // Alias for ColorWarning (#D9963D)
+val AccentRed         = ColorInactive  // Alias for ColorInactive (#E0574F)
