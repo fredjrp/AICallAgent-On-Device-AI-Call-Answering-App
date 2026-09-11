@@ -38,7 +38,10 @@ class PreferencesManager(context: Context) {
         set(value) = sharedPreferences.edit().putString(KEY_SYSTEM_PROMPT, value.trim()).apply()
 
     var selectedModel: String
-        get() = sharedPreferences.getString(KEY_SELECTED_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
+        get() {
+            val saved = sharedPreferences.getString(KEY_SELECTED_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
+            return if (AVAILABLE_MODELS.none { it.id == saved }) DEFAULT_MODEL else saved
+        }
         set(value) = sharedPreferences.edit().putString(KEY_SELECTED_MODEL, value.trim()).apply()
 
     var truecallerToken: String
@@ -107,7 +110,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_SPEAKERPHONE_ENABLED = "key_speakerphone_enabled"
         private const val KEY_TRUECALLER_TOKEN = "key_truecaller_token"
 
-        const val DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+        const val DEFAULT_MODEL = "google/gemma-4-26b-a4b-it:free"
 
         data class ModelOption(
             val id: String,
@@ -118,40 +121,46 @@ class PreferencesManager(context: Context) {
 
         val AVAILABLE_MODELS = listOf(
             ModelOption(
-                id = "meta-llama/llama-3.3-70b-instruct:free",
-                name = "Llama 3.3 70B",
+                id = "google/gemma-4-26b-a4b-it:free",
+                name = "Google Gemma 4 26B A4B",
                 isFree = true,
-                description = "Smart, fast & 100% free. Recommended."
+                description = "Google DeepMind MoE (3.8B active). Ultra-fast TTFT & low latency. Recommended default."
             ),
             ModelOption(
-                id = "google/gemini-2.0-flash-exp:free",
-                name = "Gemini 2.0 Flash",
+                id = "google/gemma-4-31b-it:free",
+                name = "Google Gemma 4 31B",
                 isFree = true,
-                description = "Ultra-low latency conversational speed."
+                description = "Google DeepMind 30.7B dense flagship. 256K context & top reasoning."
             ),
             ModelOption(
-                id = "meta-llama/llama-3.1-8b-instruct:free",
-                name = "Llama 3.1 8B",
+                id = "openrouter/free",
+                name = "OpenRouter Free Router",
                 isFree = true,
-                description = "Lightweight, instant replies."
+                description = "The simplest way to get free inference. Auto-selects active free models."
             ),
             ModelOption(
-                id = "mistralai/mistral-7b-instruct:free",
-                name = "Mistral 7B",
+                id = "nex-agi/nex-n2.5-mini:free",
+                name = "Nex AGI Nex-N2.5 Mini",
                 isFree = true,
-                description = "Concise and natural telephone tone."
+                description = "64.2B agentic conversational model. 262K context window."
             ),
             ModelOption(
-                id = "qwen/qwen-2.5-72b-instruct:free",
-                name = "Qwen 2.5 72B",
+                id = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+                name = "NVIDIA Nemotron 3 Nano Omni",
                 isFree = true,
-                description = "Top-tier instruction following & accuracy."
+                description = "30B-A3B open hybrid MoE-Mamba. Fast throughput & 256K context."
             ),
             ModelOption(
-                id = "meta-llama/llama-3.3-70b-instruct",
-                name = "Llama 3.3 70B (Paid)",
-                isFree = false,
-                description = "Standard rate limit production tier."
+                id = "inclusionai/ling-3.0-flash-vl:free",
+                name = "InclusionAI Ling 3.0 Flash VL",
+                isFree = true,
+                description = "124B total / 5.5B active MoE with instant replies. 262K context."
+            ),
+            ModelOption(
+                id = "liquid/lfm-2.5-2.6b:free",
+                name = "LiquidAI LFM 2.5 2.6B",
+                isFree = true,
+                description = "Compact 2.6B lightweight reasoning model for fast call responses."
             )
         )
 

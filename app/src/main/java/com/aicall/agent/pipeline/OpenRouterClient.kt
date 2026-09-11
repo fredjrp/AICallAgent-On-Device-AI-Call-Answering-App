@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
  */
 class OpenRouterClient(
     private val apiKeyProvider: () -> String,
-    private val modelProvider: () -> String = { "meta-llama/llama-3.3-70b-instruct" },
+    private val modelProvider: () -> String = { "google/gemma-4-26b-a4b-it:free" },
     private val okHttpClient: OkHttpClient = defaultClient()
 ) {
     data class Message(

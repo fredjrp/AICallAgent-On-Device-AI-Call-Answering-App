@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
     private var isAgentPausedState by mutableStateOf(false)
     private var currentApiKeyState by mutableStateOf("")
     private var currentPromptState by mutableStateOf("")
-    private var selectedModelState by mutableStateOf("meta-llama/llama-3.3-70b-instruct")
+    private var selectedModelState by mutableStateOf(PreferencesManager.DEFAULT_MODEL)
 
     private val dialerRoleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
