@@ -1,7 +1,6 @@
 package com.aicall.agent.ui.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -11,31 +10,31 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
-    primary = BrandPurple,
+    primary = GreenDeep,
     onPrimary = TextOnGradient,
     primaryContainer = SurfaceOverlay,
-    onPrimaryContainer = BrandPurple,
-    secondary = BrandCyan,
+    onPrimaryContainer = GreenDeep,
+    secondary = GreenPrimary,
     onSecondary = TextOnGradient,
     secondaryContainer = SurfaceOverlay,
-    onSecondaryContainer = BrandCyan,
-    tertiary = BrandMid,
-    onTertiary = TextOnGradient,
-    background = SurfaceCanvas,
+    onSecondaryContainer = GreenDeep,
+    tertiary = GreenSoft,
+    onTertiary = TextPrimary,
+    background = BgTop,
     onBackground = TextPrimary,
     surface = SurfaceCard,
     onSurface = TextPrimary,
     surfaceVariant = SurfaceOverlay,
     onSurfaceVariant = TextSecondary,
-    outline = BorderLight,
-    outlineVariant = BorderMedium,
+    outline = LineMedium,
+    outlineVariant = LineLight,
     error = ColorInactive,
     onError = TextOnGradient
 )
 
 @Composable
 fun AICallTheme(
-    darkTheme: Boolean = false, // Enforce light Apple HIG theme by default
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = LightColorScheme
@@ -44,8 +43,8 @@ fun AICallTheme(
         SideEffect {
             val window = (view.context as? Activity)?.window
             if (window != null) {
-                window.statusBarColor = SurfaceCanvas.toArgb()
-                window.navigationBarColor = SurfaceCanvas.toArgb()
+                window.statusBarColor = BgTop.toArgb()
+                window.navigationBarColor = BgBottom.toArgb()
                 val insetsController = WindowCompat.getInsetsController(window, view)
                 insetsController.isAppearanceLightStatusBars = true
                 insetsController.isAppearanceLightNavigationBars = true

@@ -31,10 +31,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -52,25 +49,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aicall.agent.telecom.CallAnswerService
 import com.aicall.agent.telecom.CallSession
-import com.aicall.agent.ui.components.SiriVoiceVisualizer
-import com.aicall.agent.ui.components.VisualizerState
+import com.aicall.agent.ui.components.InteractiveOrb
+import com.aicall.agent.ui.components.OrbVisualState
 import com.aicall.agent.ui.theme.AICallTheme
-import com.aicall.agent.ui.theme.BrandCyan
-import com.aicall.agent.ui.theme.BrandPurple
+import com.aicall.agent.ui.theme.BgTop
 import com.aicall.agent.ui.theme.ColorActive
 import com.aicall.agent.ui.theme.ColorInactive
-import com.aicall.agent.ui.theme.SurfaceCanvas
+import com.aicall.agent.ui.theme.GreenDeep
+import com.aicall.agent.ui.theme.GreenPrimary
+import com.aicall.agent.ui.theme.LineLight
 import com.aicall.agent.ui.theme.SurfaceCard
 import com.aicall.agent.ui.theme.SurfaceOverlay
+import com.aicall.agent.ui.theme.TextMuted
 import com.aicall.agent.ui.theme.TextPrimary
 import com.aicall.agent.ui.theme.TextSecondary
-import com.aicall.agent.ui.theme.TextTertiary
+import com.aicall.agent.util.PreferencesManager
 import kotlinx.coroutines.delay
 
 class InCallActivity : ComponentActivity() {
@@ -125,12 +125,24 @@ fun InCallScreen(
     onAnswer: () -> Unit,
     onDecline: () -> Unit
 ) {
+    val context = LocalContext.current
+    val prefs = PreferencesManager.getInstance(context)
     val isRinging = session?.state == android.telecom.Call.STATE_RINGING
     val isActive = session?.state == android.telecom.Call.STATE_ACTIVE
 
     var callDurationSeconds by remember { mutableLongStateOf(0L) }
+    var ringCountdownSeconds by remember { mutableLongStateOf((prefs.answerDelayRings * 3).toLong()) }
     var isMuted by remember { mutableStateOf(false) }
     var isSpeakerOn by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isRinging) {
+        if (isRinging) {
+            while (ringCountdownSeconds > 0) {
+                delay(1000)
+                ringCountdownSeconds--
+            }
+        }
+    }
 
     LaunchedEffect(isActive) {
         if (isActive) {
@@ -149,7 +161,7 @@ fun InCallScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SurfaceCanvas)
+            .background(BgTop)
             .padding(horizontal = 24.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -158,7 +170,7 @@ fun InCallScreen(
         // State indicator badge
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = if (isActive) ColorActive.copy(alpha = 0.12f) else BrandPurple.copy(alpha = 0.12f),
+            color = if (isActive) GreenPrimary.copy(alpha = 0.14f) else GreenDeep.copy(alpha = 0.12f),
             modifier = Modifier.padding(bottom = 16.dp)
         ) {
             Row(
@@ -169,17 +181,17 @@ fun InCallScreen(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(if (isActive) ColorActive else BrandPurple)
+                        .background(if (isActive) GreenPrimary else GreenDeep)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = when {
-                        isRinging -> "INCOMING CALL"
-                        isActive -> "CALL IN PROGRESS • $durationFormatted"
+                        isRinging -> if (session?.isPassiveMode == true) "RINGING (HUMAN PICKUP)" else "RINGING (AUTO-ANSWER IN ${ringCountdownSeconds}s)"
+                        isActive -> if (session?.isPassiveMode == true) "HUMAN ACTIVE • $durationFormatted" else "AI FRONT DESK • $durationFormatted"
                         else -> "CONNECTING..."
                     },
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isActive) ColorActive else BrandPurple,
+                    color = GreenDeep,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -194,60 +206,29 @@ fun InCallScreen(
             textAlign = TextAlign.Center
         )
         Text(
-            text = "AI Call Assistant Intercept",
+            text = if (session?.isPassiveMode == true) "Transcribing live conversation (Passive Mode)" else "Front Desk Voice Agent Intercept",
             style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
+            color = TextMuted,
             modifier = Modifier.padding(top = 6.dp)
         )
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        // Harmonic Voice Visualizer
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .shadow(elevation = 6.dp, shape = RoundedCornerShape(28.dp), ambientColor = BrandPurple.copy(alpha = 0.15f)),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceCard)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 24.dp, horizontal = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = if (isActive) "AI Assistant Active" else "Ready to Answer",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = BrandPurple,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                SiriVoiceVisualizer(
-                    state = if (isActive) VisualizerState.RESPONDING else VisualizerState.LISTENING,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(130.dp),
-                    audioLevel = 0.65f
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Acoustic Earpiece Uplink Connected",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextTertiary
-                )
-            }
-        }
+        // Interactive Front Desk Orb in matching call state
+        InteractiveOrb(
+            state = when {
+                isRinging -> OrbVisualState.RINGING
+                isActive && session?.isPassiveMode == true -> OrbVisualState.LISTENING
+                isActive -> OrbVisualState.SPEAKING
+                else -> OrbVisualState.IDLE
+            },
+            size = 190.dp
+        )
 
         Spacer(modifier = Modifier.weight(1f))
 
         // Bottom Controls
         if (isRinging) {
-            // Ringing state: Decline vs Answer with AI
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -255,7 +236,7 @@ fun InCallScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Decline Button (Red)
+                // Decline Button
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
@@ -266,41 +247,31 @@ fun InCallScreen(
                             .clickable(onClick = onDecline),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.CallEnd,
-                            contentDescription = "Decline",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
+                        Icon(Icons.Default.CallEnd, contentDescription = "Decline", tint = Color.White, modifier = Modifier.size(32.dp))
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Decline", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                 }
 
-                // Answer with AI Button (Green / Brand)
+                // Answer Button
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
                             .size(72.dp)
-                            .shadow(8.dp, CircleShape, ambientColor = ColorActive.copy(alpha = 0.4f))
+                            .shadow(8.dp, CircleShape, ambientColor = GreenPrimary.copy(alpha = 0.4f))
                             .clip(CircleShape)
-                            .background(ColorActive)
+                            .background(GreenPrimary)
                             .clickable(onClick = onAnswer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Call,
-                            contentDescription = "Answer",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
+                        Icon(Icons.Default.Call, contentDescription = "Answer", tint = Color.White, modifier = Modifier.size(32.dp))
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Answer", style = MaterialTheme.typography.labelMedium, color = ColorActive, fontWeight = FontWeight.Bold)
+                    Text("Answer Now", style = MaterialTheme.typography.labelMedium, color = GreenDeep, fontWeight = FontWeight.Bold)
                 }
             }
         } else {
-            // Active call state: In-call action bar (Mute, Speaker, End)
+            // Active Call Controls (Mute, End, Speaker)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -308,7 +279,7 @@ fun InCallScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Mute Toggle
+                // Mute
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
@@ -329,7 +300,7 @@ fun InCallScreen(
                     Text(if (isMuted) "Muted" else "Mute", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                 }
 
-                // End Call Button (Big Red)
+                // End Call
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
@@ -340,18 +311,13 @@ fun InCallScreen(
                             .clickable(onClick = onDecline),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.CallEnd,
-                            contentDescription = "End Call",
-                            tint = Color.White,
-                            modifier = Modifier.size(34.dp)
-                        )
+                        Icon(Icons.Default.CallEnd, contentDescription = "End Call", tint = Color.White, modifier = Modifier.size(34.dp))
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text("End Call", style = MaterialTheme.typography.labelSmall, color = ColorInactive, fontWeight = FontWeight.Bold)
                 }
 
-                // Speaker Toggle
+                // Speaker
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
@@ -364,7 +330,7 @@ fun InCallScreen(
                         Icon(
                             imageVector = Icons.Default.VolumeUp,
                             contentDescription = "Speaker",
-                            tint = if (isSpeakerOn) BrandPurple else TextPrimary,
+                            tint = if (isSpeakerOn) GreenDeep else TextPrimary,
                             modifier = Modifier.size(24.dp)
                         )
                     }

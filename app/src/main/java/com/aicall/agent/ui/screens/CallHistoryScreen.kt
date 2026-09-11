@@ -1,18 +1,11 @@
 package com.aicall.agent.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,22 +16,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallReceived
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Message
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,96 +41,102 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aicall.agent.ui.theme.BorderLight
-import com.aicall.agent.ui.theme.BrandCyan
-import com.aicall.agent.ui.theme.BrandPurple
-import com.aicall.agent.ui.theme.ColorActive
-import com.aicall.agent.ui.theme.ColorInactive
-import com.aicall.agent.ui.theme.SurfaceCanvas
+import com.aicall.agent.data.CallActionItem
+import com.aicall.agent.data.CallHistoryRepository
+import com.aicall.agent.data.CallRecord
+import com.aicall.agent.ui.theme.BgBottom
+import com.aicall.agent.ui.theme.BgTop
+import com.aicall.agent.ui.theme.GreenDeep
+import com.aicall.agent.ui.theme.GreenPrimary
+import com.aicall.agent.ui.theme.GreenSoft
+import com.aicall.agent.ui.theme.LineLight
+import com.aicall.agent.ui.theme.LineMedium
 import com.aicall.agent.ui.theme.SurfaceCard
 import com.aicall.agent.ui.theme.SurfaceOverlay
+import com.aicall.agent.ui.theme.SurfacePill
+import com.aicall.agent.ui.theme.TextMuted
 import com.aicall.agent.ui.theme.TextPrimary
 import com.aicall.agent.ui.theme.TextSecondary
 import com.aicall.agent.ui.theme.TextTertiary
 
-data class CallHistoryItem(
-    val id: String,
-    val callerName: String?,
-    val phoneNumber: String,
-    val timestamp: String,
-    val durationText: String,
-    val wasAiHandled: Boolean,
-    val summarySnippet: String,
-    val transcript: List<Pair<String, String>>, // Speaker ("Caller" or "AI") to text
-    val recordingAvailable: Boolean = false
-)
-
 @Composable
 fun CallHistoryScreen(
-    items: List<CallHistoryItem> = getSampleCallHistory(),
-    onPlayRecording: (String) -> Unit = {}
+    selectedRecordId: String? = null,
+    onClearSelectedRecord: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val repo = CallHistoryRepository.getInstance(context)
+    val records by repo.recordsFlow.collectAsState()
+
+    var activeDetailRecordId by remember(selectedRecordId) { mutableStateOf(selectedRecordId) }
+
+    val activeRecord = records.firstOrNull { it.id == activeDetailRecordId }
+
+    if (activeRecord != null) {
+        HistoryDetailView(
+            record = activeRecord,
+            allContactRecords = repo.getRecordsForContact(activeRecord.callerNumber),
+            onBack = {
+                activeDetailRecordId = null
+                onClearSelectedRecord()
+            }
+        )
+    } else {
+        HistoryListView(
+            records = records,
+            onSelectRecord = { activeDetailRecordId = it.id }
+        )
+    }
+}
+
+@Composable
+fun HistoryListView(
+    records: List<CallRecord>,
+    onSelectRecord: (CallRecord) -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SurfaceCanvas)
+            .background(BgTop)
             .padding(horizontal = 20.dp)
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Screen Header
         Text(
-            text = "Call Activity",
+            text = "Call History",
             style = MaterialTheme.typography.displaySmall,
-            color = TextPrimary
+            color = TextPrimary,
+            fontWeight = FontWeight.Bold
         )
         Text(
-            text = "Recent calls handled by AI and recorded sessions",
+            text = "Logged on-device transcripts and handled calls",
             style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary,
+            color = TextMuted,
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
         )
 
-        // Stat Badges
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            val aiCount = items.count { it.wasAiHandled }
-            StatCard(title = "AI Handled", count = "$aiCount", color = BrandPurple, modifier = Modifier.weight(1f))
-            StatCard(title = "Total Calls", count = "${items.size}", color = BrandCyan, modifier = Modifier.weight(1f))
-        }
-
-        if (items.isEmpty()) {
+        if (records.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = 48.dp),
+                    .padding(bottom = 60.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "No calls recorded yet",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextTertiary
-                )
+                Text("No call history recorded yet", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
             }
         } else {
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 90.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxSize()
             ) {
-                items(items, key = { it.id }) { item ->
-                    CallHistoryCard(
-                        item = item,
-                        onPlayRecording = { onPlayRecording(item.id) }
-                    )
+                items(records, key = { it.id }) { record ->
+                    HistoryRow(record = record, onClick = { onSelectRecord(record) })
                 }
             }
         }
@@ -143,274 +144,268 @@ fun CallHistoryScreen(
 }
 
 @Composable
-fun StatCard(
-    title: String,
-    count: String,
-    color: Color,
+fun HistoryRow(
+    record: CallRecord,
+    onClick: () -> Unit
+) {
+    val initials = if (!record.callerName.isNullOrBlank()) {
+        record.callerName.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("")
+    } else {
+        "?"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFFD8F0E0), Color(0xFFB8E4C8)))),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = initials,
+                style = MaterialTheme.typography.labelMedium,
+                color = GreenDeep,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = record.callerName ?: record.callerNumber,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextPrimary,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "${record.formattedTime} · ${record.summarySnippet.ifBlank { record.outcome }}",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted,
+                maxLines = 1,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.5.sp
+            )
+        }
+
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = TextMuted.copy(alpha = 0.5f),
+            modifier = Modifier.size(16.dp)
+        )
+    }
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(LineLight))
+}
+
+@Composable
+fun HistoryDetailView(
+    record: CallRecord,
+    allContactRecords: List<CallRecord>,
+    onBack: () -> Unit
+) {
+    val scrollState = rememberScrollState()
+    val initials = if (!record.callerName.isNullOrBlank()) {
+        record.callerName.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("")
+    } else {
+        "?"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BgTop)
+            .verticalScroll(scrollState)
+            .padding(horizontal = 20.dp)
+    ) {
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Back bar
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .clickable(onClick = onBack)
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = GreenDeep, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("History", style = MaterialTheme.typography.bodyMedium, color = GreenDeep, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Contact Hero Card
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFFD8F0E0), Color(0xFFA8E0C0)))),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = initials,
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = GreenDeep,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 26.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = record.callerName ?: record.callerNumber,
+                style = MaterialTheme.typography.displaySmall,
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = record.callerNumber,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted,
+                fontFamily = FontFamily.Monospace
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = GreenPrimary.copy(alpha = 0.12f)
+            ) {
+                Text(
+                    text = "${record.tag.uppercase()} · ${record.handledBy.uppercase()} HANDLED",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = GreenDeep,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    fontSize = 10.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Hero Stats
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            HeroStatBox(value = "${allContactRecords.size}", label = "CALLS", modifier = Modifier.weight(1f))
+            HeroStatBox(value = "${allContactRecords.count { it.outcome == "Booked" }}", label = "BOOKINGS", modifier = Modifier.weight(1f))
+            HeroStatBox(value = record.formattedDuration, label = "DURATION", modifier = Modifier.weight(1f))
+        }
+
+        Spacer(modifier = Modifier.height(26.dp))
+
+        Text(
+            text = "TRANSCRIPT & ACTIVITY",
+            style = MaterialTheme.typography.labelSmall,
+            color = TextMuted,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.2.sp
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        if (record.transcript.isEmpty()) {
+            Text("No transcript available for this call.", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+        } else {
+            record.transcript.forEach { msg ->
+                val isAgent = msg.speaker.equals("agent", ignoreCase = true)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(if (isAgent) Color(0xFFC8F0C8) else Color(0xFFCFE2D5)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isAgent) "FD" else "C",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isAgent) Color(0xFF0E3A22) else Color(0xFF2C4636),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = msg.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isAgent) Color(0xFF1F3327) else Color(0xFF556A5B),
+                        lineHeight = 20.sp
+                    )
+                }
+            }
+        }
+
+        if (record.estimatedCostUsd > 0.0 || record.promptTokens > 0) {
+            Spacer(modifier = Modifier.height(20.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = SurfaceCard,
+                border = androidx.compose.foundation.BorderStroke(1.dp, LineLight)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text("OpenRouter Cost & Usage", style = MaterialTheme.typography.labelSmall, color = GreenDeep, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Tokens: ${record.promptTokens + record.completionTokens} (${record.promptTokens} in / ${record.completionTokens} out) · Est: $${String.format("%.5f", record.estimatedCostUsd)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.5.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(90.dp))
+    }
+}
+
+@Composable
+fun HeroStatBox(
+    value: String,
+    label: String,
     modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = SurfaceCard,
-        shadowElevation = 2.dp
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(text = title, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(text = count, style = MaterialTheme.typography.headlineLarge, color = color, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-fun CallHistoryCard(
-    item: CallHistoryItem,
-    onPlayRecording: () -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val rotation by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = spring(stiffness = 300f),
-        label = "arrow_rot"
-    )
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .clickable { expanded = !expanded },
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(14.dp),
+        color = SurfacePill,
+        border = androidx.compose.foundation.BorderStroke(1.dp, LineLight)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+            modifier = Modifier.padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Row: Icon, Caller details, Time, Expand Chevron
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Status Avatar
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(if (item.wasAiHandled) BrandPurple.copy(alpha = 0.12f) else SurfaceOverlay),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (item.wasAiHandled) Icons.Default.SmartToy else Icons.Default.CallReceived,
-                        contentDescription = null,
-                        tint = if (item.wasAiHandled) BrandPurple else TextSecondary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Name & phone
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.callerName ?: item.phoneNumber,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = if (item.callerName != null) item.phoneNumber else "Incoming Call",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
-                }
-
-                // Time and Chevron
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = item.timestamp,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextTertiary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.ExpandMore,
-                        contentDescription = "Expand",
-                        tint = TextSecondary,
-                        modifier = Modifier
-                            .size(20.dp)
-                            .rotate(rotation)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Short Summary Badge & duration
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = item.summarySnippet,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                    maxLines = if (expanded) Int.MAX_VALUE else 1,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = item.durationText,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (item.wasAiHandled) ColorActive else TextTertiary,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            // Accordion: Expanded content (full conversation transcript & audio playback)
-            AnimatedVisibility(
-                visible = expanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 14.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(BorderLight)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "CONVERSATION TRANSCRIPT",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextTertiary,
-                        letterSpacing = 1.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    item.transcript.forEach { (speaker, text) ->
-                        val isAI = speaker.equals("AI", ignoreCase = true)
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            horizontalAlignment = if (isAI) Alignment.End else Alignment.Start
-                        ) {
-                            Text(
-                                text = speaker,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isAI) BrandPurple else TextSecondary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .padding(top = 2.dp)
-                                    .clip(
-                                        RoundedCornerShape(
-                                            topStart = 12.dp,
-                                            topEnd = 12.dp,
-                                            bottomStart = if (isAI) 12.dp else 2.dp,
-                                            bottomEnd = if (isAI) 2.dp else 12.dp
-                                        )
-                                    )
-                                    .background(
-                                        if (isAI) BrandPurple.copy(alpha = 0.1f) else SurfaceOverlay
-                                    )
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    text = text,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = TextPrimary
-                                )
-                            }
-                        }
-                    }
-
-                    if (item.recordingAvailable) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                            .background(SurfaceOverlay)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Audio Recording (WAV)",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = TextSecondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(onClick = onPlayRecording, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Play recording",
-                                    tint = BrandPurple
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            Text(text = value, style = MaterialTheme.typography.headlineMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = label, style = MaterialTheme.typography.labelSmall, color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
-
-fun getSampleCallHistory(): List<CallHistoryItem> = listOf(
-    CallHistoryItem(
-        id = "call-1",
-        callerName = "Dr. Evans Clinic",
-        phoneNumber = "+1 (555) 234-5678",
-        timestamp = "Today, 11:42 AM",
-        durationText = "1m 14s",
-        wasAiHandled = true,
-        summarySnippet = "Confirmed appointment for Thursday at 2:30 PM",
-        transcript = listOf(
-            "Caller" to "Hello, calling to confirm tomorrow's appointment for 2:30 PM.",
-            "AI" to "Hello, this is the AI assistant. I have confirmed the 2:30 PM appointment on Thursday. Thank you!",
-            "Caller" to "Great, see you then. Bye."
-        ),
-        recordingAvailable = true
-    ),
-    CallHistoryItem(
-        id = "call-2",
-        callerName = "Amazon Delivery",
-        phoneNumber = "+1 (555) 987-6543",
-        timestamp = "Today, 9:15 AM",
-        durationText = "48s",
-        wasAiHandled = true,
-        summarySnippet = "Instructed courier to leave package at front door",
-        transcript = listOf(
-            "Caller" to "Hi, I'm downstairs with your package. Need a code or gate key.",
-            "AI" to "Hello! Please leave the package securely by the front door behind the planter. Thanks!",
-            "Caller" to "Got it, left it by the planter. Have a good one."
-        ),
-        recordingAvailable = true
-    ),
-    CallHistoryItem(
-        id = "call-3",
-        callerName = null,
-        phoneNumber = "+1 (800) 444-1234",
-        timestamp = "Yesterday",
-        durationText = "12s",
-        wasAiHandled = false,
-        summarySnippet = "Potential Telemarketer — Auto-rejected",
-        transcript = listOf(
-            "Caller" to "This is an urgent notice regarding your vehicle warranty...",
-            "AI" to "The recipient is unavailable and has requested not to receive sales calls. Goodbye."
-        ),
-        recordingAvailable = false
-    )
-)

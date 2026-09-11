@@ -35,9 +35,10 @@ class MainActivity : ComponentActivity() {
 
     private var isDefaultDialerState by mutableStateOf(false)
     private var isAutoAnswerState by mutableStateOf(true)
+    private var isAgentPausedState by mutableStateOf(false)
     private var currentApiKeyState by mutableStateOf("")
     private var currentPromptState by mutableStateOf("")
-    private var selectedModelState by mutableStateOf("mistralai/mistral-7b-instruct")
+    private var selectedModelState by mutableStateOf("meta-llama/llama-3.3-70b-instruct")
 
     private val dialerRoleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -69,7 +70,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private var initialScreenState by mutableStateOf(com.aicall.agent.ui.navigation.Screen.ASSISTANT)
+    private var initialScreenState by mutableStateOf(com.aicall.agent.ui.navigation.Screen.HOME)
     private var prefilledNumberState by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,6 +82,7 @@ class MainActivity : ComponentActivity() {
 
         // Initialize state from encrypted prefs
         isAutoAnswerState = prefs.isAutoAnswerEnabled
+        isAgentPausedState = prefs.isAgentPaused
         currentApiKeyState = prefs.openRouterApiKey
         currentPromptState = prefs.systemPrompt
         selectedModelState = prefs.selectedModel
@@ -108,6 +110,14 @@ class MainActivity : ComponentActivity() {
                         isAutoAnswerState = enabled
                         prefs.isAutoAnswerEnabled = enabled
                         Logger.i("MainActivity", "Auto-answer toggled: $enabled")
+                    },
+                    isAgentPaused = isAgentPausedState,
+                    onTogglePause = {
+                        val next = !isAgentPausedState
+                        isAgentPausedState = next
+                        prefs.isAgentPaused = next
+                        val text = if (next) "Agent Paused. Calls ring directly to phone." else "Agent Resumed."
+                        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
                     },
                     isDefaultDialer = isDefaultDialerState,
                     shizukuState = shizukuState,
@@ -208,9 +218,9 @@ class MainActivity : ComponentActivity() {
             val schemeSpecific = data?.schemeSpecificPart
             if (!schemeSpecific.isNullOrEmpty()) {
                 prefilledNumberState = schemeSpecific
-                initialScreenState = com.aicall.agent.ui.navigation.Screen.KEYPAD
+                initialScreenState = com.aicall.agent.ui.navigation.Screen.HOME
             } else if (intent.action == android.content.Intent.ACTION_DIAL) {
-                initialScreenState = com.aicall.agent.ui.navigation.Screen.KEYPAD
+                initialScreenState = com.aicall.agent.ui.navigation.Screen.HOME
             }
         }
     }

@@ -15,7 +15,12 @@ data class CallSession(
     var state: Int,
     val startTimeMs: Long,
     var endTimeMs: Long? = null,
-    var recordingPath: String? = null
+    var recordingPath: String? = null,
+    var handledBy: String = "agent", // "agent" or "human" (Passive mode)
+    var isPassiveMode: Boolean = false,
+    var promptTokens: Int = 0,
+    var completionTokens: Int = 0,
+    var estimatedCostUsd: Double = 0.0
 ) {
     val durationSeconds: Long
         get() {

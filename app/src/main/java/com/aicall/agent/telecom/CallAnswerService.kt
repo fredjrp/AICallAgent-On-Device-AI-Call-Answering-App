@@ -2,19 +2,34 @@ package com.aicall.agent.telecom
 
 import android.annotation.SuppressLint
 import android.app.Notification
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.telecom.Call
 import android.telecom.InCallService
 import android.telecom.VideoProfile
 import androidx.core.app.NotificationCompat
 import com.aicall.agent.AICallApplication
 import com.aicall.agent.audio.CallAudioCapture
+import com.aicall.agent.audio.CallAudioPlayback
+import com.aicall.agent.data.BusinessKnowledgeManager
+import com.aicall.agent.data.CallActionItem
+import com.aicall.agent.data.CallHistoryRepository
+import com.aicall.agent.data.CallRecord
+import com.aicall.agent.pipeline.ConversationOrchestrator
+import com.aicall.agent.pipeline.KokoroTtsEngine
+import com.aicall.agent.pipeline.OpenRouterClient
+import com.aicall.agent.pipeline.WhisperCppEngine
 import com.aicall.agent.util.Logger
 import com.aicall.agent.util.PreferencesManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,27 +42,54 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Privileged InCallService.
- * Automatically answers incoming calls and captures live call audio via AudioRecord.
+ * Privileged InCallService implementing Section 2.8 pickup logic:
+ * 1. Incoming call rings -> launch InCallActivity with ringing countdown.
+ * 2. If human picks up manually during the ring window: switch to PASSIVE MODE.
+ *    Captures & transcribes call audio, files as `handledBy: human`, no AI voice playback.
+ * 3. If countdown expires with no human pickup: auto-answer and engage full AI pipeline.
+ * 4. At call end: files complete CallRecord to CallHistoryRepository (local-only, no mock data).
  */
 class CallAnswerService : InCallService() {
 
     private val tag = "CallAnswerService"
     private var audioCapture: CallAudioCapture? = null
+    private var orchestrator: ConversationOrchestrator? = null
     private val callCallbacks = ConcurrentHashMap<Call, Call.Callback>()
     private val callSessions = ConcurrentHashMap<Call, CallSession>()
+    private val ringTimers = ConcurrentHashMap<Call, Runnable>()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val serviceScope = CoroutineScope(Dispatchers.Default + Job())
 
     override fun onCreate() {
         super.onCreate()
         Logger.i(tag, "CallAnswerService created and bound to Android Telecom")
         activeServiceInstance = this
         com.aicall.agent.shizuku.ShizukuStatusMonitor.startMonitoring()
+
+        val prefs = PreferencesManager.getInstance(this)
+        val openRouterClient = OpenRouterClient(
+            apiKeyProvider = { prefs.openRouterApiKey },
+            modelProvider = { prefs.selectedModel }
+        )
+        val tts = KokoroTtsEngine()
+        val stt = WhisperCppEngine()
+        val playback = CallAudioPlayback(this)
+
+        orchestrator = ConversationOrchestrator(
+            speechToText = stt,
+            openRouterClient = openRouterClient,
+            textToSpeech = tts,
+            audioPlayback = playback
+        )
+        activeOrchestrator = orchestrator
     }
 
     override fun onDestroy() {
         super.onDestroy()
         Logger.i(tag, "CallAnswerService destroyed")
         audioCapture?.stopCapture()
+        orchestrator?.stop()
+        activeOrchestrator = null
         activeServiceInstance = null
         com.aicall.agent.shizuku.ShizukuStatusMonitor.stopMonitoring()
     }
@@ -108,6 +150,7 @@ class CallAnswerService : InCallService() {
                 targetCall.unregisterCallback(this)
                 callCallbacks.remove(targetCall)
                 callSessions.remove(targetCall)
+                ringTimers.remove(targetCall)?.let { mainHandler.removeCallbacks(it) }
                 if (activeCall == targetCall) {
                     activeCall = null
                     _currentSessionFlow.value = null
@@ -118,7 +161,6 @@ class CallAnswerService : InCallService() {
         callCallbacks[call] = callback
         call.registerCallback(callback)
 
-        // Handle immediate state if already ringing or active upon addition
         if (call.state == Call.STATE_RINGING) {
             handleIncomingRinging(call, session)
         } else if (call.state == Call.STATE_ACTIVE) {
@@ -137,28 +179,57 @@ class CallAnswerService : InCallService() {
 
     private fun handleIncomingRinging(call: Call, session: CallSession) {
         val prefs = PreferencesManager.getInstance(this)
-        Logger.i(tag, "Incoming call ringing: ${session.phoneNumber}. AutoAnswer=${prefs.isAutoAnswerEnabled}", session.sessionId)
+        Logger.i(tag, "Incoming call ringing: ${session.phoneNumber}. AutoAnswer=${prefs.isAutoAnswerEnabled}, Paused=${prefs.isAgentPaused}", session.sessionId)
 
         notifyListeners { it.onCallRinging(session.sessionId, call, session.phoneNumber) }
 
-        if (prefs.isAutoAnswerEnabled) {
-            Logger.i(tag, "Auto-answering incoming call...", session.sessionId)
-            try {
-                // Auto-answer with audio only
-                call.answer(VideoProfile.STATE_AUDIO_ONLY)
-                notifyListeners { it.onCallAnswered(session.sessionId, call) }
-            } catch (e: Exception) {
-                Logger.e(tag, "Failed to auto-answer call", session.sessionId, e)
+        // If agent is paused or auto-answer disabled: let human phone dialer ring without auto-pickup
+        if (prefs.isAgentPaused || !prefs.isAutoAnswerEnabled) {
+            Logger.i(tag, "Agent is paused/disabled; leaving call to ring normally for human.", session.sessionId)
+            return
+        }
+
+        // Section 2.8: Ring delay window
+        val rings = prefs.answerDelayRings.coerceAtLeast(1)
+        val delayMillis = rings * 3000L // ~3 seconds per ring cycle
+
+        Logger.i(tag, "Scheduled ring window: $rings rings ($delayMillis ms)", session.sessionId)
+
+        val autoAnswerRunnable = Runnable {
+            if (call.state == Call.STATE_RINGING) {
+                Logger.i(tag, "Ring window expired. Auto-answering call with AI Agent.", session.sessionId)
+                try {
+                    session.handledBy = "agent"
+                    session.isPassiveMode = false
+                    call.answer(VideoProfile.STATE_AUDIO_ONLY)
+                    notifyListeners { it.onCallAnswered(session.sessionId, call) }
+                } catch (e: Exception) {
+                    Logger.e(tag, "Failed to auto-answer call", session.sessionId, e)
+                }
             }
         }
+
+        ringTimers[call] = autoAnswerRunnable
+        mainHandler.postDelayed(autoAnswerRunnable, delayMillis)
     }
 
     @SuppressLint("ForegroundServiceType")
     private fun handleCallActive(call: Call, session: CallSession) {
-        Logger.i(tag, "Call is now ACTIVE. Starting in-call foreground notification and capture.", session.sessionId)
+        Logger.i(tag, "Call is now ACTIVE: ${session.sessionId}", session.sessionId)
+
+        // Cancel pending auto-answer timer if active
+        ringTimers.remove(call)?.let {
+            mainHandler.removeCallbacks(it)
+            // If the timer was still pending and call became active, a human picked up manually!
+            session.handledBy = "human"
+            session.isPassiveMode = true
+            Logger.i(tag, "Human answered manually during ring window! Engaging PASSIVE MODE.", session.sessionId)
+        }
 
         // Promote to foreground service
-        val notification = buildInCallNotification("In call with ${session.phoneNumber}")
+        val isPassive = session.isPassiveMode
+        val notificationTitle = if (isPassive) "Human Call (Transcribing)" else "AI Agent Call Active"
+        val notification = buildInCallNotification("$notificationTitle with ${session.phoneNumber}")
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
@@ -184,6 +255,15 @@ class CallAnswerService : InCallService() {
             postShizukuAlert("Shizuku Permission Required", "Grant AICallAgent permission in Shizuku.")
         }
 
+        // Start Conversation Orchestrator loop
+        val kb = BusinessKnowledgeManager.getInstance(this)
+        val dynamicPrompt = kb.buildSystemPrompt()
+        orchestrator?.start(
+            sessionId = session.sessionId,
+            isPassive = session.isPassiveMode,
+            dynamicSystemPrompt = dynamicPrompt
+        )
+
         // Start audio capture
         val prefs = PreferencesManager.getInstance(this)
         val recordingsDir = File(getExternalFilesDir(null), "recordings").apply { mkdirs() }
@@ -198,7 +278,7 @@ class CallAnswerService : InCallService() {
         val started = capture.startCapture(session.sessionId, wavFile) { file, samples ->
             session.endTimeMs = System.currentTimeMillis()
             Logger.i(tag, "Recording finished: ${file?.name}, duration=${session.durationSeconds}s, samples=$samples", session.sessionId)
-            addCompletedSession(session)
+            fileCallRecord(session)
         }
 
         if (!started) {
@@ -225,15 +305,64 @@ class CallAnswerService : InCallService() {
     private fun handleCallDisconnected(call: Call, session: CallSession) {
         Logger.i(tag, "Call disconnecting/disconnected: ${session.sessionId}", session.sessionId)
 
+        ringTimers.remove(call)?.let { mainHandler.removeCallbacks(it) }
+
         audioCapture?.stopCapture()
         audioCapture = null
+
+        orchestrator?.stop()
 
         session.endTimeMs = System.currentTimeMillis()
         notifyListeners { it.onCallDisconnected(session.sessionId, call, call.details?.disconnectCause?.toString()) }
 
+        fileCallRecord(session)
+
         try {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } catch (_: Exception) {}
+    }
+
+    private fun fileCallRecord(session: CallSession) {
+        val repo = CallHistoryRepository.getInstance(this)
+        val currentTranscript = orchestrator?.getCurrentTranscript() ?: emptyList()
+        val currentActions = orchestrator?.getCurrentActions() ?: emptyList()
+
+        val outcome = when {
+            session.durationSeconds < 5 -> "Dropped"
+            currentActions.any { it.type == "booking" } -> "Booked"
+            currentActions.any { it.type == "reminder" } -> "Message"
+            currentActions.any { it.type == "note" } -> "Pricing"
+            else -> "Inquiry"
+        }
+
+        val summary = if (currentTranscript.isNotEmpty()) {
+            val lastMsg = currentTranscript.last().text
+            if (lastMsg.length > 65) lastMsg.take(65) + "…" else lastMsg
+        } else {
+            if (session.handledBy == "human") "Handled manually by user" else "Call completed"
+        }
+
+        val record = CallRecord(
+            id = session.sessionId,
+            callerNumber = session.phoneNumber,
+            callerName = null,
+            tag = if (repo.getRecordsForContact(session.phoneNumber).isNotEmpty()) "Returning caller" else "New caller",
+            timestampMs = session.startTimeMs,
+            durationSeconds = session.durationSeconds,
+            handledBy = session.handledBy,
+            outcome = outcome,
+            summarySnippet = summary,
+            transcript = currentTranscript,
+            actionItems = currentActions,
+            recordingPath = session.recordingPath,
+            promptTokens = orchestrator?.totalPromptTokens ?: 0,
+            completionTokens = orchestrator?.totalCompletionTokens ?: 0,
+            estimatedCostUsd = orchestrator?.totalEstimatedCost ?: 0.0
+        )
+
+        repo.saveRecord(record)
+        addCompletedSession(session)
+        Logger.i(tag, "Call record filed to repository: ${record.id}, handledBy=${record.handledBy}, outcome=$outcome")
     }
 
     private fun extractPhoneNumber(call: Call): String {
@@ -255,14 +384,14 @@ class CallAnswerService : InCallService() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_UPDATE_CURRENT
         }
-        val pendingIntent = android.app.PendingIntent.getActivity(this, 0, inCallIntent, flags)
+        val pendingIntent = PendingIntent.getActivity(this, 0, inCallIntent, flags)
 
         return NotificationCompat.Builder(this, AICallApplication.CHANNEL_ID_INCALL)
-            .setContentTitle("AICallAgent Active Call")
+            .setContentTitle("AICallAgent Active")
             .setContentText(content)
             .setSmallIcon(android.R.drawable.ic_menu_call)
             .setContentIntent(pendingIntent)
@@ -289,6 +418,10 @@ class CallAnswerService : InCallService() {
 
         @Volatile
         var activeServiceInstance: CallAnswerService? = null
+            private set
+
+        @Volatile
+        var activeOrchestrator: ConversationOrchestrator? = null
             private set
 
         private val _currentSessionFlow = MutableStateFlow<CallSession?>(null)

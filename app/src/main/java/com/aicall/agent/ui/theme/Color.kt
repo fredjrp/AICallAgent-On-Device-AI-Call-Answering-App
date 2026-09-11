@@ -2,34 +2,43 @@ package com.aicall.agent.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ── Brand Gradient ──────────────────────────────────────────────────────────
-val BrandPurple   = Color(0xFF8950E5)   // Deep Purple — gradient start
-val BrandCyan     = Color(0xFF00B6F9)   // Bright Cyan  — gradient end
-val BrandMid      = Color(0xFF4E89F0)   // Midpoint for 3-stop gradients
+// ── Voice Agent Front Desk — Sage/Mint Theme (from Design HTML) ──────────────
+// Primary Brand Accents
+val GreenPrimary      = Color(0xFF4CAF7D)   // --green: #4CAF7D
+val GreenDeep         = Color(0xFF2E7D56)   // --green-deep: #2E7D56
+val GreenSoft         = Color(0xFF8FCFA8)   // --green-soft: #8FCFA8
+val GreenDark         = Color(0xFF14402A)   // Heavy dark forest green
 
-// ── Semantic Status ──────────────────────────────────────────────────────────
-val ColorActive   = Color(0xFF34C759)   // iOS-green  — AI Enabled
-val ColorInactive = Color(0xFFFF3B30)   // iOS-red    — AI Disabled / missed
-val ColorWarning  = Color(0xFFFF9500)   // iOS-orange — partial / warning
-val ColorInfo     = Color(0xFF007AFF)   // iOS-blue   — informational
+// Surface & Background Gradients
+val BgTop             = Color(0xFFF4F8F2)   // Top warm off-white canvas
+val BgMid             = Color(0xFFEDF3EA)   // Mid off-white
+val BgBottom          = Color(0xFFE3EBE0)   // Lower subtle mint-grey
+val SurfaceCard       = Color(0xFFFFFFFF)   // Elevated white cards
+val SurfaceTranslucent= Color(0xA6FFFFFF)   // rgba(255, 255, 255, 0.65)
+val SurfacePill       = Color(0xB8FFFFFF)   // rgba(255, 255, 255, 0.72)
+val SurfaceOverlay    = Color(0xFFE8EFE5)   // Light tint for grouped rows/chips
 
-// ── Light Surface Palette ────────────────────────────────────────────────────
-val SurfaceCanvas   = Color(0xFFF9FAFB) // Off-white page background
-val SurfaceCard     = Color(0xFFFFFFFF) // Pure white elevated cards
-val SurfaceOverlay  = Color(0xFFF2F2F7) // iOS-style grouped table background
-val SurfacePressed  = Color(0xFFE8E8ED) // Pressed / ripple state
+// Typography Colors
+val TextPrimary       = Color(0xFF0F1A12)   // Deep forest near-black (--text)
+val TextSecondary     = Color(0xFF2C3B31)   // Dark slate green (--text-2)
+val TextMuted         = Color(0xFF7A8C80)   // Medium muted green-grey (--muted)
+val TextTertiary      = Color(0xFF90A396)   // Lighter timestamps / mono
+val TextOnGradient    = Color(0xFFFFFFFF)
 
-// ── Typography Colors ────────────────────────────────────────────────────────
-val TextPrimary    = Color(0xFF111827)  // Near-black heading
-val TextSecondary  = Color(0xFF6B7280)  // Medium-grey subtext
-val TextTertiary   = Color(0xFF9CA3AF)  // Light-grey timestamps / labels
-val TextOnGradient = Color(0xFFFFFFFF)  // White on gradient surfaces
+// Semantic Accents
+val ColorActive       = GreenPrimary
+val ColorInactive     = Color(0xFFE0574F)   // --red: #E0574F
+val ColorWarning      = Color(0xFFD9963D)   // --amber: #D9963D
+val ColorInfo         = Color(0xFF3B82F6)
 
-// ── Divider / Border ─────────────────────────────────────────────────────────
-val BorderLight    = Color(0xFFE5E7EB)  // 1dp separator line
-val BorderMedium   = Color(0xFFD1D5DB)
+// Borders & Lines
+val LineLight         = Color(0x0F1E3C28)   // rgba(30,60,40, 0.06)
+val LineMedium        = Color(0x171E3C28)   // rgba(30,60,40, 0.09)
+val BorderLight       = LineLight
+val BorderMedium      = LineMedium
+val SurfaceCanvas     = BgTop
 
-// ── Visualizer States ────────────────────────────────────────────────────────
-val VisualizerIdle      = Color(0xFFBDBDBD)
-val VisualizerListening = BrandPurple
-val VisualizerResponding= BrandCyan
+// Backward-compatibility aliases for earlier components
+val BrandPurple       = GreenDeep
+val BrandCyan         = GreenPrimary
+val BrandMid          = GreenSoft

@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.os.Build
 import com.aicall.agent.shizuku.ShizukuAudioAccess
 import com.aicall.agent.util.Logger
+import com.aicall.agent.work.DailyBriefingWorker
 
 class AICallApplication : Application() {
 
@@ -14,6 +15,7 @@ class AICallApplication : Application() {
         Logger.i("AICallApplication", "AICallAgent application initialized")
         createNotificationChannels()
         ShizukuAudioAccess.init()
+        DailyBriefingWorker.schedule(this)
     }
 
     override fun onTerminate() {
@@ -33,7 +35,7 @@ class AICallApplication : Application() {
                 description = "Foreground service notification for live call audio processing"
                 setSound(null, null)
             }
-            notificationManager.createNotificationChannel(inCallChannel)
+            notificationManager?.createNotificationChannel(inCallChannel)
 
             val alertChannel = NotificationChannel(
                 CHANNEL_ID_ALERTS,
@@ -42,7 +44,7 @@ class AICallApplication : Application() {
             ).apply {
                 description = "Alerts when Shizuku service or critical permissions are disconnected"
             }
-            notificationManager.createNotificationChannel(alertChannel)
+            notificationManager?.createNotificationChannel(alertChannel)
         }
     }
 
