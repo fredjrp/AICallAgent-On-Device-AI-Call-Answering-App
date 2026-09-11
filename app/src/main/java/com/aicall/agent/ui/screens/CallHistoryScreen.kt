@@ -133,6 +133,7 @@ fun HistoryListView(
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 100.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(records, key = { it.id }) { record ->

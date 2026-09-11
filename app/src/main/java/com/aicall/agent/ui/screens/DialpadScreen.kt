@@ -48,12 +48,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aicall.agent.ui.theme.BgTop
 import com.aicall.agent.ui.theme.ColorActive
-import com.aicall.agent.ui.theme.SurfaceCanvas
 import com.aicall.agent.ui.theme.SurfaceOverlay
 import com.aicall.agent.ui.theme.TextPrimary
 import com.aicall.agent.ui.theme.TextSecondary
-import com.aicall.agent.ui.theme.TextTertiary
 
 data class DialKey(
     val digit: String,
@@ -62,11 +61,11 @@ data class DialKey(
 
 @Composable
 fun DialpadScreen(
-    initialNumber: String = "",
+    prefilledNumber: String = "",
     onCallPlaced: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    var dialedNumber by remember(initialNumber) { mutableStateOf(initialNumber) }
+    var dialedNumber by remember(prefilledNumber) { mutableStateOf(prefilledNumber) }
 
     val keys = listOf(
         listOf(DialKey("1", ""), DialKey("2", "A B C"), DialKey("3", "D E F")),
@@ -78,31 +77,39 @@ fun DialpadScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SurfaceCanvas)
+            .background(BgTop)
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Text(
             text = "Keypad",
             style = MaterialTheme.typography.displaySmall,
-            color = TextPrimary
+            color = TextPrimary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
         )
-
-        Spacer(modifier = Modifier.weight(0.6f))
+        Text(
+            text = "Dial any number",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextSecondary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp, bottom = 20.dp)
+        )
 
         // Display area for entered number
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp),
+                .height(72.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = dialedNumber,
+                text = dialedNumber.ifEmpty { " " },
                 style = MaterialTheme.typography.displayMedium.copy(
-                    fontSize = if (dialedNumber.length > 12) 24.sp else 32.sp
+                    fontSize = if (dialedNumber.length > 12) 24.sp else 34.sp
                 ),
                 color = TextPrimary,
                 textAlign = TextAlign.Center,
@@ -111,7 +118,7 @@ fun DialpadScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // 3x4 Dialpad Matrix
         Column(
@@ -134,7 +141,7 @@ fun DialpadScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Bottom Action Row: Spacer, Big Green Call Button, Backspace
         Row(
@@ -188,8 +195,8 @@ fun DialpadScreen(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-        Spacer(modifier = Modifier.height(70.dp)) // Nav bar inset
+        // Nav bar breathing room
+        Spacer(modifier = Modifier.height(100.dp))
     }
 }
 

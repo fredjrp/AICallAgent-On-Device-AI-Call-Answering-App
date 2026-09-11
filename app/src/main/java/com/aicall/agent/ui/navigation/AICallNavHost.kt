@@ -52,7 +52,6 @@ import com.aicall.agent.ui.screens.BusinessInfoScreen
 import com.aicall.agent.ui.screens.CallHistoryScreen
 import com.aicall.agent.ui.screens.DialpadScreen
 import com.aicall.agent.ui.screens.HomeScreen
-import com.aicall.agent.ui.screens.LiveCallScreen
 import com.aicall.agent.ui.screens.OnboardingWizard
 import com.aicall.agent.ui.screens.SettingsScreen
 import com.aicall.agent.ui.theme.BgBottom
