@@ -21,6 +21,7 @@ import com.aicall.agent.data.BusinessKnowledgeManager
 import com.aicall.agent.data.CallActionItem
 import com.aicall.agent.data.CallHistoryRepository
 import com.aicall.agent.data.CallRecord
+import com.aicall.agent.pipeline.AndroidTtsEngine
 import com.aicall.agent.pipeline.ConversationOrchestrator
 import com.aicall.agent.pipeline.KokoroTtsEngine
 import com.aicall.agent.pipeline.OpenRouterClient
@@ -72,7 +73,8 @@ class CallAnswerService : InCallService() {
             apiKeyProvider = { prefs.openRouterApiKey },
             modelProvider = { prefs.selectedModel }
         )
-        val tts = KokoroTtsEngine()
+        val androidTts = AndroidTtsEngine(this)
+        val tts = KokoroTtsEngine(fallbackEngine = androidTts)
         val stt = WhisperCppEngine()
         val playback = CallAudioPlayback(this)
 
@@ -240,11 +242,13 @@ class CallAnswerService : InCallService() {
         Logger.i(tag, "Scheduled ring window: $rings rings ($delayMillis ms)", session.sessionId)
 
         val autoAnswerRunnable = Runnable {
+            ringTimers.remove(call)
             if (call.state == Call.STATE_RINGING) {
                 Logger.i(tag, "Ring window expired. Auto-answering call with AI Agent.", session.sessionId)
                 try {
                     session.handledBy = "agent"
                     session.isPassiveMode = false
+                    _currentSessionFlow.value = session.copy(handledBy = "agent", isPassiveMode = false)
                     call.answer(VideoProfile.STATE_AUDIO_ONLY)
                     notifyListeners { it.onCallAnswered(session.sessionId, call) }
                 } catch (e: Exception) {
@@ -261,14 +265,16 @@ class CallAnswerService : InCallService() {
     private fun handleCallActive(call: Call, session: CallSession) {
         Logger.i(tag, "Call is now ACTIVE: ${session.sessionId}", session.sessionId)
 
-        // Cancel pending auto-answer timer if active
-        ringTimers.remove(call)?.let {
-            mainHandler.removeCallbacks(it)
+        // Cancel pending auto-answer timer if active (indicates manual human pickup before timer expired)
+        val pendingTimer = ringTimers.remove(call)
+        if (pendingTimer != null) {
+            mainHandler.removeCallbacks(pendingTimer)
             // If the timer was still pending and call became active, a human picked up manually!
             session.handledBy = "human"
             session.isPassiveMode = true
             Logger.i(tag, "Human answered manually during ring window! Engaging PASSIVE MODE.", session.sessionId)
         }
+        _currentSessionFlow.value = session.copy(state = Call.STATE_ACTIVE)
 
         // Promote to foreground service
         val isPassive = session.isPassiveMode
@@ -483,7 +489,19 @@ class CallAnswerService : InCallService() {
         }
 
         fun answerCurrentCall() {
-            activeCall?.answer(VideoProfile.STATE_AUDIO_ONLY)
+            activeCall?.let { call ->
+                val service = activeServiceInstance
+                service?.ringTimers?.remove(call)?.let { timer ->
+                    service.mainHandler.removeCallbacks(timer)
+                }
+                val session = service?.callSessions?.get(call)
+                if (session != null) {
+                    session.handledBy = "human"
+                    session.isPassiveMode = true
+                    _currentSessionFlow.value = session.copy(handledBy = "human", isPassiveMode = true)
+                }
+                call.answer(VideoProfile.STATE_AUDIO_ONLY)
+            }
         }
 
         fun hangUpCurrentCall() {

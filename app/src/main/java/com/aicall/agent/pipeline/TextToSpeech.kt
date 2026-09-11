@@ -17,7 +17,8 @@ interface TextToSpeech {
 class KokoroTtsEngine(
     override val engineName: String = "kokoro-v1.0",
     override val sampleRate: Int = 22050,
-    private val nativeBridge: TtsNativeBridge? = null
+    private val nativeBridge: TtsNativeBridge? = null,
+    private val fallbackEngine: TextToSpeech? = null
 ) : TextToSpeech {
 
     interface TtsNativeBridge {
@@ -26,7 +27,7 @@ class KokoroTtsEngine(
     }
 
     override fun isModelLoaded(): Boolean {
-        return nativeBridge?.isLoaded() ?: false
+        return (nativeBridge?.isLoaded() ?: false) || (fallbackEngine?.isModelLoaded() ?: false)
     }
 
     override suspend fun synthesize(text: String): ShortArray {
@@ -38,6 +39,8 @@ class KokoroTtsEngine(
         val bridge = nativeBridge
         return if (bridge != null && bridge.isLoaded()) {
             bridge.generateSpeech(sanitized)
+        } else if (fallbackEngine != null) {
+            fallbackEngine.synthesize(sanitized)
         } else {
             ShortArray(0)
         }

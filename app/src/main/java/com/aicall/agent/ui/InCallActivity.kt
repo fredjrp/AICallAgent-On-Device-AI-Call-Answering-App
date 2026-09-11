@@ -184,6 +184,7 @@ fun InCallScreen(
     val isRinging = session?.state == android.telecom.Call.STATE_RINGING
     val isActive = session?.state == android.telecom.Call.STATE_ACTIVE
 
+    var isAnswering by remember { mutableStateOf(false) }
     var callDurationSeconds by remember { mutableLongStateOf(0L) }
     var ringCountdownSeconds by remember { mutableLongStateOf((prefs.answerDelayRings * 3).toLong()) }
     var isMuted by remember { mutableStateOf(false) }
@@ -195,11 +196,14 @@ fun InCallScreen(
                 delay(1000)
                 ringCountdownSeconds--
             }
+            // Auto-answer countdown reached zero
+            isAnswering = true
         }
     }
 
     LaunchedEffect(isActive) {
         if (isActive) {
+            isAnswering = false
             val start = System.currentTimeMillis()
             while (true) {
                 callDurationSeconds = (System.currentTimeMillis() - start) / 1000
@@ -211,6 +215,7 @@ fun InCallScreen(
     val minutes = callDurationSeconds / 60
     val seconds = callDurationSeconds % 60
     val durationFormatted = String.format("%02d:%02d", minutes, seconds)
+    val showRingingControls = isRinging && !isAnswering && ringCountdownSeconds > 0
 
     Box(
         modifier = Modifier
@@ -250,7 +255,8 @@ fun InCallScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = when {
-                            isRinging -> if (session?.isPassiveMode == true) "RINGING (HUMAN PICKUP)" else "RINGING · AI AUTO-ANSWER IN ${ringCountdownSeconds}s"
+                            showRingingControls -> if (session?.isPassiveMode == true) "RINGING (HUMAN PICKUP)" else "RINGING · AI AUTO-ANSWER IN ${ringCountdownSeconds}s"
+                            isAnswering && !isActive -> "CONNECTING CALL..."
                             isActive -> if (session?.isPassiveMode == true) "HUMAN ACTIVE · $durationFormatted" else "AI FRONT DESK · $durationFormatted"
                             else -> "CONNECTING..."
                         },
@@ -263,12 +269,21 @@ fun InCallScreen(
 
             // ── Caller Details ────────────────────────────────────────────
             Text(
-                text = session?.phoneNumber ?: "Unknown Caller",
+                text = session?.callerName ?: session?.phoneNumber ?: "Unknown Caller",
                 style = MaterialTheme.typography.displayMedium,
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
+            if (!session?.callerName.isNullOrBlank()) {
+                Text(
+                    text = session?.phoneNumber ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    modifier = Modifier.padding(top = 2.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
             Text(
                 text = if (session?.isPassiveMode == true) "Transcribing live conversation (Passive Mode)"
                        else "Front Desk Voice Agent Active",
@@ -283,7 +298,8 @@ fun InCallScreen(
             // ── Interactive Orb ───────────────────────────────────────────
             InteractiveOrb(
                 state = when {
-                    isRinging -> OrbVisualState.RINGING
+                    showRingingControls -> OrbVisualState.RINGING
+                    isAnswering && !isActive -> OrbVisualState.THINKING
                     isActive && session?.isPassiveMode == true -> OrbVisualState.LISTENING
                     isActive -> OrbVisualState.SPEAKING
                     else -> OrbVisualState.IDLE
@@ -294,8 +310,14 @@ fun InCallScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             // ── Bottom Controls ───────────────────────────────────────────
-            if (isRinging) {
-                RingingControls(onDecline = onDecline, onAnswer = onAnswer)
+            if (showRingingControls) {
+                RingingControls(
+                    onDecline = onDecline,
+                    onAnswer = {
+                        isAnswering = true
+                        onAnswer()
+                    }
+                )
             } else {
                 ActiveCallControls(
                     isMuted = isMuted,

@@ -230,15 +230,22 @@ fun HomeScreen(
                     indication = null
                 ) {
                     if (!isTestingAssistant && currentSession == null) {
-                        scope.launch {
-                            isTestingAssistant = true
-                            testFeedbackMessage = "\"Hello, I'm $assistantName! I'm ready to answer your calls.\""
-                            // Simulate quick voice test pulse
-                            delay(2800)
-                            isTestingAssistant = false
-                            delay(2000)
-                            testFeedbackMessage = null
-                        }
+                        isTestingAssistant = true
+                        com.aicall.agent.pipeline.AppVoiceSpeaker.testAssistant(
+                            context = context,
+                            scope = scope,
+                            onStatusChange = { msg, speaking ->
+                                testFeedbackMessage = msg.ifEmpty { null }
+                                isTestingAssistant = speaking
+                            },
+                            onFinished = {
+                                isTestingAssistant = false
+                                scope.launch {
+                                    delay(2000)
+                                    testFeedbackMessage = null
+                                }
+                            }
+                        )
                     }
                 },
             contentAlignment = Alignment.Center
