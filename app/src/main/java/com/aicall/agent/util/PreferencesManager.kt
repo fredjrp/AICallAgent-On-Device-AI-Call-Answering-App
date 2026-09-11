@@ -38,8 +38,12 @@ class PreferencesManager(context: Context) {
         set(value) = sharedPreferences.edit().putString(KEY_SYSTEM_PROMPT, value.trim()).apply()
 
     var selectedModel: String
-        get() = sharedPreferences.getString(KEY_SELECTED_MODEL, "meta-llama/llama-3.3-70b-instruct") ?: "meta-llama/llama-3.3-70b-instruct"
+        get() = sharedPreferences.getString(KEY_SELECTED_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
         set(value) = sharedPreferences.edit().putString(KEY_SELECTED_MODEL, value.trim()).apply()
+
+    var truecallerToken: String
+        get() = sharedPreferences.getString(KEY_TRUECALLER_TOKEN, "") ?: ""
+        set(value) = sharedPreferences.edit().putString(KEY_TRUECALLER_TOKEN, value.trim()).apply()
 
     var isAutoAnswerEnabled: Boolean
         get() = sharedPreferences.getBoolean(KEY_AUTO_ANSWER_ENABLED, true)
@@ -101,9 +105,58 @@ class PreferencesManager(context: Context) {
         private const val KEY_AUTO_DISCONNECT_SECONDS = "key_auto_disconnect_seconds"
         private const val KEY_DAILY_BRIEFING_HOUR = "key_daily_briefing_hour"
         private const val KEY_SPEAKERPHONE_ENABLED = "key_speakerphone_enabled"
+        private const val KEY_TRUECALLER_TOKEN = "key_truecaller_token"
+
+        const val DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+
+        data class ModelOption(
+            val id: String,
+            val name: String,
+            val isFree: Boolean,
+            val description: String
+        )
+
+        val AVAILABLE_MODELS = listOf(
+            ModelOption(
+                id = "meta-llama/llama-3.3-70b-instruct:free",
+                name = "Llama 3.3 70B",
+                isFree = true,
+                description = "Smart, fast & 100% free. Recommended."
+            ),
+            ModelOption(
+                id = "google/gemini-2.0-flash-exp:free",
+                name = "Gemini 2.0 Flash",
+                isFree = true,
+                description = "Ultra-low latency conversational speed."
+            ),
+            ModelOption(
+                id = "meta-llama/llama-3.1-8b-instruct:free",
+                name = "Llama 3.1 8B",
+                isFree = true,
+                description = "Lightweight, instant replies."
+            ),
+            ModelOption(
+                id = "mistralai/mistral-7b-instruct:free",
+                name = "Mistral 7B",
+                isFree = true,
+                description = "Concise and natural telephone tone."
+            ),
+            ModelOption(
+                id = "qwen/qwen-2.5-72b-instruct:free",
+                name = "Qwen 2.5 72B",
+                isFree = true,
+                description = "Top-tier instruction following & accuracy."
+            ),
+            ModelOption(
+                id = "meta-llama/llama-3.3-70b-instruct",
+                name = "Llama 3.3 70B (Paid)",
+                isFree = false,
+                description = "Standard rate limit production tier."
+            )
+        )
 
         const val DEFAULT_SYSTEM_PROMPT =
-            "You are a helpful and polite voice AI phone assistant for Front Desk. " +
+            "You are Linda, a helpful and polite voice AI phone assistant. " +
             "Answer the caller concisely, take messages, provide necessary info, and let them know the team will get back to them."
 
         @Volatile

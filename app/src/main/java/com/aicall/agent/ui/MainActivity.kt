@@ -218,9 +218,9 @@ class MainActivity : ComponentActivity() {
             val schemeSpecific = data?.schemeSpecificPart
             if (!schemeSpecific.isNullOrEmpty()) {
                 prefilledNumberState = schemeSpecific
-                initialScreenState = com.aicall.agent.ui.navigation.Screen.HOME
+                initialScreenState = com.aicall.agent.ui.navigation.Screen.KEYPAD
             } else if (intent.action == android.content.Intent.ACTION_DIAL) {
-                initialScreenState = com.aicall.agent.ui.navigation.Screen.HOME
+                initialScreenState = com.aicall.agent.ui.navigation.Screen.KEYPAD
             }
         }
     }

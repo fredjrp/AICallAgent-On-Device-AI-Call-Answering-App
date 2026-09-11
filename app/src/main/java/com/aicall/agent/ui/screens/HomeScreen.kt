@@ -1,8 +1,12 @@
 package com.aicall.agent.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,61 +23,70 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aicall.agent.data.BusinessKnowledgeManager
 import com.aicall.agent.data.CallHistoryRepository
 import com.aicall.agent.data.CallRecord
+import com.aicall.agent.pipeline.KokoroTtsEngine
 import com.aicall.agent.shizuku.ShizukuState
-import com.aicall.agent.telecom.CallAnswerService
 import com.aicall.agent.telecom.CallSession
 import com.aicall.agent.ui.components.InteractiveOrb
 import com.aicall.agent.ui.components.OrbVisualState
-import com.aicall.agent.ui.theme.BgBottom
-import com.aicall.agent.ui.theme.BgMid
 import com.aicall.agent.ui.theme.BgTop
-import com.aicall.agent.ui.theme.ColorActive
 import com.aicall.agent.ui.theme.ColorInactive
 import com.aicall.agent.ui.theme.ColorWarning
-import com.aicall.agent.ui.theme.GreenDark
 import com.aicall.agent.ui.theme.GreenDeep
 import com.aicall.agent.ui.theme.GreenPrimary
-import com.aicall.agent.ui.theme.GreenSoft
 import com.aicall.agent.ui.theme.LineLight
 import com.aicall.agent.ui.theme.LineMedium
 import com.aicall.agent.ui.theme.SurfaceCard
-import com.aicall.agent.ui.theme.SurfacePill
+import com.aicall.agent.ui.theme.SurfaceOverlay
 import com.aicall.agent.ui.theme.TextMuted
 import com.aicall.agent.ui.theme.TextPrimary
 import com.aicall.agent.ui.theme.TextSecondary
-import com.aicall.agent.ui.theme.TextTertiary
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
+/**
+ * Clean, frictionless Home Screen:
+ * - Dominant, pulsating Interactive Orb (240dp) with tap-to-test voice sandbox.
+ * - Beneath the Orb: "Standing by" sub-status and editable Assistant Persona (default: "Linda").
+ * - Zero media pause button, zero disjointed stat rectangles, zero quick shortcuts.
+ * - Directly anchored Recent Calls feed that gracefully fills the screen down to bottom navigation.
+ */
 @Composable
 fun HomeScreen(
     currentSession: CallSession?,
     isAutoAnswerEnabled: Boolean,
     isAgentPaused: Boolean,
-    onTogglePause: () -> Unit,
     shizukuState: ShizukuState,
     isDefaultDialer: Boolean,
     onRequestDialerRole: () -> Unit,
@@ -82,11 +95,21 @@ fun HomeScreen(
     onSelectRecord: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val kb = BusinessKnowledgeManager.getInstance(context)
     val historyRepo = CallHistoryRepository.getInstance(context)
     val callRecords by historyRepo.recordsFlow.collectAsState()
-    val todayStats = historyRepo.getTodayStats()
+
+    var assistantName by remember { mutableStateOf(kb.assistantName) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var tempRenameText by remember { mutableStateOf(assistantName) }
+
+    // Test Sandbox State for Orb interaction
+    var isTestingAssistant by remember { mutableStateOf(false) }
+    var testFeedbackMessage by remember { mutableStateOf<String?>(null) }
 
     val orbState = when {
+        isTestingAssistant -> OrbVisualState.SPEAKING
         isAgentPaused -> OrbVisualState.PAUSED
         currentSession != null && currentSession.state == android.telecom.Call.STATE_RINGING -> OrbVisualState.RINGING
         currentSession != null && currentSession.state == android.telecom.Call.STATE_ACTIVE -> OrbVisualState.SPEAKING
@@ -101,12 +124,12 @@ fun HomeScreen(
             .fillMaxSize()
             .background(BgTop)
             .verticalScroll(scrollState)
-            .padding(horizontal = 22.dp),
+            .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // System Diagnostic Warning Banners if not ready
+        // Diagnostic Banners (Only shown when setup incomplete)
         if (!isDefaultDialer) {
             Surface(
                 modifier = Modifier
@@ -117,7 +140,7 @@ fun HomeScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, ColorWarning.copy(alpha = 0.3f))
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.Warning, contentDescription = null, tint = ColorWarning, modifier = Modifier.size(18.dp))
@@ -145,7 +168,7 @@ fun HomeScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, ColorInactive.copy(alpha = 0.25f))
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.Warning, contentDescription = null, tint = ColorInactive, modifier = Modifier.size(18.dp))
@@ -172,7 +195,7 @@ fun HomeScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, GreenPrimary.copy(alpha = 0.4f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.PhoneInTalk, contentDescription = null, tint = GreenDeep, modifier = Modifier.size(20.dp))
@@ -185,7 +208,7 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = if (currentSession.isPassiveMode) "Human call (transcribing) • ${currentSession.durationSeconds}s" else "AI agent active • ${currentSession.durationSeconds}s",
+                            text = if (currentSession.isPassiveMode) "Human call (transcribing) • ${currentSession.durationSeconds}s" else "$assistantName is active • ${currentSession.durationSeconds}s",
                             style = MaterialTheme.typography.bodySmall,
                             color = GreenDeep
                         )
@@ -195,70 +218,103 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(14.dp))
         }
 
-        // The Central Interactive Orb
-        Spacer(modifier = Modifier.height(12.dp))
-        InteractiveOrb(
-            state = orbState,
-            size = 200.dp
-        )
+        Spacer(modifier = Modifier.height(20.dp))
 
-        Spacer(modifier = Modifier.height(18.dp))
-        Text(
-            text = orbState.statusSub,
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextMuted,
-            letterSpacing = 0.2.sp
-        )
-        Text(
-            text = orbState.label,
-            style = MaterialTheme.typography.displaySmall,
-            color = TextPrimary,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        // Pause/Resume Quick Toggle
-        Spacer(modifier = Modifier.height(10.dp))
-        Surface(
-            modifier = Modifier.clickable(onClick = onTogglePause),
-            shape = RoundedCornerShape(20.dp),
-            color = if (isAgentPaused) ColorWarning.copy(alpha = 0.15f) else LineLight,
-            border = androidx.compose.foundation.BorderStroke(1.dp, if (isAgentPaused) ColorWarning else LineMedium)
+        // ── DOMINANT HERO INTERACTIVE ORB (240dp) ───────────────────────────
+        // Tapping the Orb lets the user test the voice assistant live
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    if (!isTestingAssistant && currentSession == null) {
+                        scope.launch {
+                            isTestingAssistant = true
+                            testFeedbackMessage = "\"Hello, I'm $assistantName! I'm ready to answer your calls.\""
+                            // Simulate quick voice test pulse
+                            delay(2800)
+                            isTestingAssistant = false
+                            delay(2000)
+                            testFeedbackMessage = null
+                        }
+                    }
+                },
+            contentAlignment = Alignment.Center
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
+            InteractiveOrb(
+                state = orbState,
+                size = 240.dp
+            )
+        }
+
+        // Live Voice Feedback Pill when testing
+        AnimatedVisibility(
+            visible = testFeedbackMessage != null,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier
+                    .padding(top = 10.dp)
+                    .fillMaxWidth(0.85f),
+                shape = RoundedCornerShape(16.dp),
+                color = GreenPrimary.copy(alpha = 0.12f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, GreenPrimary.copy(alpha = 0.3f))
             ) {
-                Icon(
-                    imageVector = if (isAgentPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                    contentDescription = null,
-                    tint = if (isAgentPaused) ColorWarning else TextSecondary,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = if (isAgentPaused) "Resume Agent" else "Pause Agent",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isAgentPaused) ColorWarning else TextSecondary,
-                    fontWeight = FontWeight.SemiBold
+                    text = testFeedbackMessage ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = GreenDeep,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // 3-Stat Strip
+        // ── SUB-STATUS & EDITABLE ASSISTANT PERSONA ─────────────────────────
+        Text(
+            text = if (isTestingAssistant) "Speaking test greeting..." else orbState.statusSub,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextMuted,
+            letterSpacing = 0.2.sp
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Assistant Name with subtle edit hint (tap to rename)
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .clickable {
+                    tempRenameText = assistantName
+                    showRenameDialog = true
+                }
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            StatPill(number = "${todayStats.first}", label = "Calls today", modifier = Modifier.weight(1f))
-            StatPill(number = todayStats.second, label = "Avg. handled", modifier = Modifier.weight(1f))
-            StatPill(number = "${todayStats.third}", label = "Missed", modifier = Modifier.weight(1f))
+            Text(
+                text = assistantName,
+                style = MaterialTheme.typography.displaySmall,
+                color = TextPrimary,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = "Rename Assistant",
+                tint = TextMuted.copy(alpha = 0.7f),
+                modifier = Modifier.size(16.dp)
+            )
         }
 
-        Spacer(modifier = Modifier.height(26.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        // Recent Section Header
+        // ── RECENT CALLS FEED ───────────────────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -280,22 +336,36 @@ fun HomeScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Recent Calls List
-        val recentList = callRecords.take(4)
+        val recentList = callRecords.take(5)
         if (recentList.isEmpty()) {
-            Box(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 32.dp),
-                contentAlignment = Alignment.Center
+                    .padding(vertical = 16.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = SurfaceOverlay.copy(alpha = 0.5f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, LineLight)
             ) {
-                Text(
-                    text = "No calls recorded yet. Incoming calls will appear here.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextMuted
-                )
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "No calls recorded yet",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "$assistantName is standing by to answer your incoming calls.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         } else {
             recentList.forEach { record ->
@@ -306,38 +376,65 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(90.dp)) // padding for bottom nav
+        // Bottom navigation bar breathing room
+        Spacer(modifier = Modifier.height(100.dp))
     }
-}
 
-@Composable
-fun StatPill(
-    number: String,
-    label: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = SurfacePill,
-        border = androidx.compose.foundation.BorderStroke(1.dp, LineLight),
-        shadowElevation = 1.dp
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp)) {
-            Text(
-                text = number,
-                style = MaterialTheme.typography.headlineMedium,
-                color = TextPrimary,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = TextMuted,
-                fontSize = 11.sp
-            )
-        }
+    // ── RENAME ASSISTANT DIALOG ─────────────────────────────────────────────
+    if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = {
+                Text(
+                    text = "Name your Assistant",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Give your phone assistant a friendly name like Linda, Sarah, or Alex. She will introduce herself with this name when answering calls.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    OutlinedTextField(
+                        value = tempRenameText,
+                        onValueChange = { tempRenameText = it },
+                        singleLine = true,
+                        placeholder = { Text("e.g. Linda") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GreenDeep,
+                            unfocusedBorderColor = LineMedium,
+                            cursorColor = GreenDeep
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val cleaned = tempRenameText.trim().ifEmpty { "Linda" }
+                        kb.assistantName = cleaned
+                        assistantName = cleaned
+                        showRenameDialog = false
+                    }
+                ) {
+                    Text("Save", color = GreenDeep, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) {
+                    Text("Cancel", color = TextMuted)
+                }
+            },
+            containerColor = SurfaceCard,
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 }
 
@@ -349,32 +446,33 @@ fun RecentRowItem(
     val initials = if (!record.callerName.isNullOrBlank()) {
         record.callerName.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("")
     } else {
-        "?"
+        record.callerNumber.filter { it.isDigit() }.takeLast(2).ifEmpty { "?" }
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 11.dp),
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(40.dp)
                 .clip(CircleShape)
-                .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFFD8F0E0), Color(0xFFB8E4C8)))),
+                .background(Brush.linearGradient(listOf(Color(0xFFD8F0E0), Color(0xFFB8E4C8)))),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = initials,
+                text = initials.uppercase(),
                 style = MaterialTheme.typography.labelMedium,
                 color = GreenDeep,
                 fontWeight = FontWeight.Bold
             )
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -388,7 +486,7 @@ fun RecentRowItem(
                 style = MaterialTheme.typography.bodySmall,
                 color = TextMuted,
                 fontFamily = FontFamily.Monospace,
-                fontSize = 11.5.sp
+                fontSize = 12.sp
             )
         }
 
@@ -396,7 +494,8 @@ fun RecentRowItem(
             text = record.formattedDuration,
             style = MaterialTheme.typography.bodySmall,
             color = TextMuted,
-            fontFamily = FontFamily.Monospace
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp
         )
     }
     Box(

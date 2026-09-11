@@ -12,6 +12,7 @@ interface CallEventListener {
 data class CallSession(
     val sessionId: String,
     val phoneNumber: String,
+    var callerName: String? = null,
     var state: Int,
     val startTimeMs: Long,
     var endTimeMs: Long? = null,

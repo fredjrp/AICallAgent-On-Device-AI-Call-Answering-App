@@ -68,9 +68,9 @@ enum class Screen(
     val unselectedIcon: ImageVector
 ) {
     HOME("Home", Icons.Filled.Home, Icons.Outlined.Home),
-    LIVE("Live", Icons.Filled.PhoneInTalk, Icons.Outlined.PhoneInTalk),
-    HISTORY("History", Icons.Filled.History, Icons.Outlined.History),
-    SETUP("Setup", Icons.Filled.Settings, Icons.Outlined.Settings)
+    RECENTS("Recents", Icons.Filled.History, Icons.Outlined.History),
+    KEYPAD("Keypad", Icons.Filled.Dialpad, Icons.Filled.Dialpad),
+    SETUP("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
 enum class SubScreen {
@@ -100,8 +100,14 @@ fun AICallMainApp(
     initialScreen: Screen = Screen.HOME,
     prefilledNumber: String = ""
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = com.aicall.agent.util.PreferencesManager.getInstance(context)
+
     var currentScreen by remember(initialScreen) { mutableStateOf(initialScreen) }
-    var activeSubScreen by remember { mutableStateOf(SubScreen.NONE) }
+    // Auto-run Onboarding on first launch if not yet completed
+    var activeSubScreen by remember {
+        mutableStateOf(if (!prefs.isOnboardingCompleted) SubScreen.ONBOARDING else SubScreen.NONE)
+    }
     var targetHistoryId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -130,7 +136,10 @@ fun AICallMainApp(
                         shizukuState = shizukuState,
                         onRequestDialerRole = onRequestDialerRole,
                         onRequestShizuku = onRequestShizukuPermission,
-                        onComplete = { activeSubScreen = SubScreen.NONE }
+                        onComplete = {
+                            prefs.isOnboardingCompleted = true
+                            activeSubScreen = SubScreen.NONE
+                        }
                     )
                 }
                 SubScreen.NONE -> {
@@ -139,24 +148,22 @@ fun AICallMainApp(
                             currentSession = currentSession,
                             isAutoAnswerEnabled = isAutoAnswerEnabled,
                             isAgentPaused = isAgentPaused,
-                            onTogglePause = onTogglePause,
                             shizukuState = shizukuState,
                             isDefaultDialer = isDefaultDialer,
                             onRequestDialerRole = onRequestDialerRole,
                             onRequestShizuku = onRequestShizukuPermission,
-                            onSeeAllHistory = { currentScreen = Screen.HISTORY },
+                            onSeeAllHistory = { currentScreen = Screen.RECENTS },
                             onSelectRecord = { recordId ->
                                 targetHistoryId = recordId
-                                currentScreen = Screen.HISTORY
+                                currentScreen = Screen.RECENTS
                             }
                         )
-                        Screen.LIVE -> LiveCallScreen(
-                            currentSession = currentSession,
-                            onEndCall = { CallAnswerService.hangUpCurrentCall() }
-                        )
-                        Screen.HISTORY -> CallHistoryScreen(
+                        Screen.RECENTS -> CallHistoryScreen(
                             selectedRecordId = targetHistoryId,
                             onClearSelectedRecord = { targetHistoryId = null }
+                        )
+                        Screen.KEYPAD -> DialpadScreen(
+                            prefilledNumber = prefilledNumber
                         )
                         Screen.SETUP -> SettingsScreen(
                             currentApiKey = currentApiKey,

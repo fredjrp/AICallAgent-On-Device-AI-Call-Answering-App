@@ -18,17 +18,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,19 +45,17 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aicall.agent.data.BusinessKnowledgeManager
 import com.aicall.agent.data.CallHistoryRepository
 import com.aicall.agent.shizuku.ShizukuState
 import com.aicall.agent.ui.theme.BgTop
-import com.aicall.agent.ui.theme.ColorActive
 import com.aicall.agent.ui.theme.ColorInactive
-import com.aicall.agent.ui.theme.ColorWarning
 import com.aicall.agent.ui.theme.GreenDeep
 import com.aicall.agent.ui.theme.GreenPrimary
 import com.aicall.agent.ui.theme.LineLight
 import com.aicall.agent.ui.theme.LineMedium
 import com.aicall.agent.ui.theme.SurfaceCard
 import com.aicall.agent.ui.theme.SurfaceOverlay
-import com.aicall.agent.ui.theme.SurfacePill
 import com.aicall.agent.ui.theme.TextMuted
 import com.aicall.agent.ui.theme.TextPrimary
 import com.aicall.agent.ui.theme.TextSecondary
@@ -76,12 +76,20 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val prefs = PreferencesManager.getInstance(context)
+    val kb = BusinessKnowledgeManager.getInstance(context)
     val historyRepo = CallHistoryRepository.getInstance(context)
     val totalCostAndTokens = historyRepo.getTotalCostAndTokens()
 
     var isAutoAnswer by remember { mutableStateOf(prefs.isAutoAnswerEnabled) }
     var speakEarpiece by remember { mutableStateOf(prefs.speakThroughEarpiece) }
     var saveTranscripts by remember { mutableStateOf(prefs.saveTranscripts) }
+
+    // Dialog states
+    var showModelDialog by remember { mutableStateOf(false) }
+    var showApiKeyDialog by remember { mutableStateOf(false) }
+    var showTruecallerDialog by remember { mutableStateOf(false) }
+    var tempApiKey by remember { mutableStateOf(currentApiKey) }
+    var tempTruecallerToken by remember { mutableStateOf(prefs.truecallerToken) }
 
     val scrollState = rememberScrollState()
 
@@ -95,21 +103,21 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Setup",
+            text = "Settings",
             style = MaterialTheme.typography.displaySmall,
             color = TextPrimary,
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = "Connections and behaviour",
+            text = "Models, credentials, and behavior",
             style = MaterialTheme.typography.bodySmall,
             color = TextMuted,
             modifier = Modifier.padding(top = 4.dp, bottom = 22.dp)
         )
 
-        // Group 1: Business Knowledge Base
+        // ── Group 1: Assistant & Business ───────────────────────────────────
         Text(
-            text = "KNOWLEDGE BASE",
+            text = "ASSISTANT & KNOWLEDGE BASE",
             style = MaterialTheme.typography.labelSmall,
             color = TextMuted,
             fontWeight = FontWeight.Bold,
@@ -131,7 +139,12 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text("Business Info & Pricing", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                    Text(
+                        text = "Business Info & Assistant Name (${kb.assistantName})",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
                     Text("Hours, rates, policies (100% on-device)", style = MaterialTheme.typography.bodySmall, color = TextMuted)
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
@@ -140,7 +153,7 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Group 2: Model & Intelligence
+        // ── Group 2: Model & Credentials (with Free Models) ─────────────────
         Text(
             text = "MODEL & CREDENTIALS",
             style = MaterialTheme.typography.labelSmall,
@@ -157,19 +170,44 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
+                // Model Row (Tap to change)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showModelDialog = true }
+                        .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("Model", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Model", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                            if (selectedModel.endsWith(":free")) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = GreenPrimary.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "FREE",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = GreenDeep,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.sp,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
                         Text(selectedModel, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontFamily = FontFamily.Monospace)
                     }
+                    Text("Change", style = MaterialTheme.typography.labelSmall, color = GreenDeep, fontWeight = FontWeight.Bold)
                 }
 
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp).height(1.dp).background(LineLight))
 
+                // Voice Synthesizer
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -177,29 +215,61 @@ fun SettingsScreen(
                 ) {
                     Column {
                         Text("Voice Synthesizer", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                        Text("Kokoro · warm female", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                        Text("Kokoro · on-device neural TTS", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
                     }
                 }
 
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp).height(1.dp).background(LineLight))
 
+                // OpenRouter Key
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            tempApiKey = currentApiKey
+                            showApiKeyDialog = true
+                        }
+                        .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("OpenRouter Key", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                        val maskedKey = if (currentApiKey.length > 8) currentApiKey.take(7) + "••••••••" + currentApiKey.takeLast(4) else "Not set"
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("OpenRouter API Key", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                        val maskedKey = if (currentApiKey.length > 8) currentApiKey.take(7) + "••••••••" + currentApiKey.takeLast(4) else "Not set (tap to configure)"
                         Text(maskedKey, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontFamily = FontFamily.Monospace)
                     }
+                    Text("Edit", style = MaterialTheme.typography.labelSmall, color = GreenDeep, fontWeight = FontWeight.Bold)
+                }
+
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp).height(1.dp).background(LineLight))
+
+                // Truecaller Token (truecallerjs)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            tempTruecallerToken = prefs.truecallerToken
+                            showTruecallerDialog = true
+                        }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Truecaller Token (Caller ID)", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                        val maskedTc = if (prefs.truecallerToken.length > 8) prefs.truecallerToken.take(5) + "••••••" else if (prefs.truecallerToken.isNotEmpty()) "Configured" else "Optional (for unsaved caller names)"
+                        Text(maskedTc, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontFamily = FontFamily.Monospace)
+                    }
+                    Text("Edit", style = MaterialTheme.typography.labelSmall, color = GreenDeep, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Group 3: Behaviour Toggles matching HTML design
+        // ── Group 3: Behaviour Toggles ──────────────────────────────────────
         Text(
             text = "BEHAVIOUR",
             style = MaterialTheme.typography.labelSmall,
@@ -220,14 +290,15 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 12.dp),
+                        .padding(vertical = 12.dp)
+                        .clickable { onRequestShizukuPermission() },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
                         Text("Shizuku", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                         Text(
-                            text = if (shizukuState == ShizukuState.RUNNING_AUTHORIZED) "Running · call audio access" else "Action needed",
+                            text = if (shizukuState == ShizukuState.RUNNING_AUTHORIZED) "Running · call audio access active" else "Tap to grant audio access permission",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextMuted
                         )
@@ -279,7 +350,7 @@ fun SettingsScreen(
                 ) {
                     Column {
                         Text("Speak through earpiece", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                        Text("Quiet, private playback", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                        Text("Quiet, private acoustic playback", style = MaterialTheme.typography.bodySmall, color = TextMuted)
                     }
                     Switch(
                         checked = speakEarpiece,
@@ -306,7 +377,7 @@ fun SettingsScreen(
                 ) {
                     Column {
                         Text("Save transcripts", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                        Text("On this device only", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                        Text("On this device only (100-call limit)", style = MaterialTheme.typography.bodySmall, color = TextMuted)
                     }
                     Switch(
                         checked = saveTranscripts,
@@ -325,7 +396,7 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Group 4: Cost & Token Tracker (2.5)
+        // ── Group 4: Usage & Costs ──────────────────────────────────────────
         Text(
             text = "USAGE & OPENROUTER COSTS",
             style = MaterialTheme.typography.labelSmall,
@@ -362,7 +433,7 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Re-run Onboarding button
+        // ── Re-run Setup Wizard ─────────────────────────────────────────────
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -371,15 +442,213 @@ fun SettingsScreen(
             color = LineLight
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Re-run Setup Wizard", style = MaterialTheme.typography.bodySmall, color = TextSecondary, fontWeight = FontWeight.Medium)
-                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                Column {
+                    Text("Run Setup Wizard Again", style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Reconfigure permissions, model, and business info", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp))
             }
         }
 
         Spacer(modifier = Modifier.height(100.dp))
+    }
+
+    // ── MODEL PICKER DIALOG (Free Models Highlighted) ───────────────────────
+    if (showModelDialog) {
+        AlertDialog(
+            onDismissRequest = { showModelDialog = false },
+            title = {
+                Text(
+                    text = "Select AI Model",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = "Choose an OpenRouter model. Models marked FREE incur zero API cost.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    PreferencesManager.AVAILABLE_MODELS.forEach { opt ->
+                        val isCurrent = selectedModel == opt.id
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    onSelectModel(opt.id)
+                                    prefs.selectedModel = opt.id
+                                    showModelDialog = false
+                                },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isCurrent) GreenPrimary.copy(alpha = 0.12f) else SurfaceOverlay,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isCurrent) GreenDeep else LineLight)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = opt.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isCurrent) GreenDeep else TextPrimary
+                                    )
+                                    if (opt.isFree) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = GreenPrimary.copy(alpha = 0.18f)
+                                        ) {
+                                            Text(
+                                                text = "FREE",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = GreenDeep,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = opt.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextMuted
+                                )
+                                Text(
+                                    text = opt.id,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted.copy(alpha = 0.7f),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showModelDialog = false }) {
+                    Text("Close", color = GreenDeep)
+                }
+            },
+            containerColor = SurfaceCard,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // ── API KEY DIALOG ──────────────────────────────────────────────────────
+    if (showApiKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showApiKeyDialog = false },
+            title = {
+                Text("OpenRouter API Key", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+            },
+            text = {
+                Column {
+                    Text(
+                        "Stored securely in Android Keystore with AES-GCM encryption.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    OutlinedTextField(
+                        value = tempApiKey,
+                        onValueChange = { tempApiKey = it },
+                        singleLine = true,
+                        placeholder = { Text("sk-or-v1-...") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GreenDeep,
+                            unfocusedBorderColor = LineMedium,
+                            cursorColor = GreenDeep
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val cleaned = tempApiKey.trim()
+                        onSaveApiKey(cleaned)
+                        prefs.openRouterApiKey = cleaned
+                        showApiKeyDialog = false
+                    }
+                ) {
+                    Text("Save", color = GreenDeep, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showApiKeyDialog = false }) {
+                    Text("Cancel", color = TextMuted)
+                }
+            },
+            containerColor = SurfaceCard,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // ── TRUECALLER TOKEN DIALOG ─────────────────────────────────────────────
+    if (showTruecallerDialog) {
+        AlertDialog(
+            onDismissRequest = { showTruecallerDialog = false },
+            title = {
+                Text("Truecaller Token", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+            },
+            text = {
+                Column {
+                    Text(
+                        "Used by the app to identify unsaved incoming numbers in real-time using Truecaller's reverse search directory (truecallerjs architecture).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    OutlinedTextField(
+                        value = tempTruecallerToken,
+                        onValueChange = { tempTruecallerToken = it },
+                        singleLine = true,
+                        placeholder = { Text("Installation ID / Bearer token") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GreenDeep,
+                            unfocusedBorderColor = LineMedium,
+                            cursorColor = GreenDeep
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        prefs.truecallerToken = tempTruecallerToken.trim()
+                        showTruecallerDialog = false
+                    }
+                ) {
+                    Text("Save", color = GreenDeep, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTruecallerDialog = false }) {
+                    Text("Cancel", color = TextMuted)
+                }
+            },
+            containerColor = SurfaceCard,
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 }

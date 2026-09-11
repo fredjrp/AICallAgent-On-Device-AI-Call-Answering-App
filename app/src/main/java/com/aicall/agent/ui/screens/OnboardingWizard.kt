@@ -84,6 +84,7 @@ fun OnboardingWizard(
 
     var step by remember { mutableIntStateOf(1) }
     var apiKey by remember { mutableStateOf(prefs.openRouterApiKey) }
+    var assistantNameInput by remember { mutableStateOf(kb.assistantName) }
     var bizName by remember { mutableStateOf(kb.businessName) }
     var bizHours by remember { mutableStateOf(kb.businessHours) }
 
@@ -309,6 +310,15 @@ fun OnboardingWizard(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
+                    value = assistantNameInput,
+                    onValueChange = { assistantNameInput = it },
+                    label = { Text("Assistant Name") },
+                    placeholder = { Text("e.g. Linda, Sarah, Alex") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
                     value = bizName,
                     onValueChange = { bizName = it },
                     label = { Text("Business Name") },
@@ -336,6 +346,7 @@ fun OnboardingWizard(
                     step++
                 } else {
                     prefs.openRouterApiKey = apiKey.trim()
+                    kb.assistantName = assistantNameInput.trim().ifEmpty { "Linda" }
                     kb.businessName = bizName.trim()
                     kb.businessHours = bizHours.trim()
                     prefs.isOnboardingCompleted = true

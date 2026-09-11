@@ -139,6 +139,21 @@ class CallAnswerService : InCallService() {
 
         Logger.i(tag, "New call added: state=${call.state}, caller=$phoneNumber", sessionId)
 
+        // Resolve caller name asynchronously (Contacts -> History -> Truecaller -> Unknown)
+        serviceScope.launch {
+            try {
+                val resolver = com.aicall.agent.data.CallerIdResolver.getInstance(this@CallAnswerService)
+                val identity = resolver.resolve(phoneNumber)
+                if (!identity.displayName.isNullOrBlank()) {
+                    session.callerName = identity.displayName
+                    _currentSessionFlow.value = session.copy(callerName = identity.displayName)
+                    Logger.i(tag, "Caller identified: ${identity.displayName} via ${identity.source}", sessionId)
+                }
+            } catch (e: Exception) {
+                Logger.w(tag, "Caller resolution error: ${e.message}", sessionId)
+            }
+        }
+
         // Launch In-Call UI Activity
         try {
             val inCallIntent = Intent(this, com.aicall.agent.ui.InCallActivity::class.java).apply {
@@ -373,7 +388,7 @@ class CallAnswerService : InCallService() {
         val record = CallRecord(
             id = session.sessionId,
             callerNumber = session.phoneNumber,
-            callerName = null,
+            callerName = session.callerName,
             tag = if (repo.getRecordsForContact(session.phoneNumber).isNotEmpty()) "Returning caller" else "New caller",
             timestampMs = session.startTimeMs,
             durationSeconds = session.durationSeconds,

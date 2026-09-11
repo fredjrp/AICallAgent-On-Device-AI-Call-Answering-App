@@ -40,6 +40,10 @@ class BusinessKnowledgeManager(context: Context) {
         context.getSharedPreferences("aicall_local_business_kb_fallback", Context.MODE_PRIVATE)
     }
 
+    var assistantName: String
+        get() = prefs.getString(KEY_ASSISTANT_NAME, "Linda") ?: "Linda"
+        set(value) = prefs.edit().putString(KEY_ASSISTANT_NAME, value.trim().ifEmpty { "Linda" }).apply()
+
     var businessName: String
         get() = prefs.getString(KEY_BUSINESS_NAME, "Front Desk") ?: "Front Desk"
         set(value) = prefs.edit().putString(KEY_BUSINESS_NAME, value.trim()).apply()
@@ -124,7 +128,7 @@ class BusinessKnowledgeManager(context: Context) {
 
         return buildString {
             // ── Core identity ──────────────────────────────────────────────
-            append("You are the live telephone voice assistant for '$businessName'. ")
+            append("You are $assistantName, the live telephone voice assistant for '$businessName'. ")
             append("You answer incoming phone calls naturally, warmly, and concisely. ")
             append("Speak in complete, natural sentences exactly as a human receptionist would. ")
             append("Each of your responses must be one to two spoken sentences maximum. ")
@@ -194,6 +198,7 @@ class BusinessKnowledgeManager(context: Context) {
     }
 
     companion object {
+        private const val KEY_ASSISTANT_NAME = "kb_assistant_name"
         private const val KEY_BUSINESS_NAME = "kb_business_name"
         private const val KEY_BUSINESS_HOURS = "kb_business_hours"
         private const val KEY_POLICIES_FAQS = "kb_policies_faqs"
